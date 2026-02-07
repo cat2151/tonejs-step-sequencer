@@ -1,19 +1,15 @@
 # tonejs-step-sequencer
 
-## 状況
-- 未着手
-- いつやる？
-  - 気が向いたら
-    - 機が熟したら
+Tone.js + `tonejs-json-sequencer` の疎通チェック用デモです。demo-library / streaming demo を参考に、C4 の四分音符が NDJSON ストリーム経由でループ再生されます。
 
-## いろいろ
-- input : プルダウンで、音色JSONライブラリのURLを選べる。さらに別プルダウンで、その中身から音色を選ぶ
-- 前提、tonejs-json-sequencerのstreamのバグ修正ができて、ちゃんときっちり16分音符loopができること。これが最低限。
-- ひとまずその最低限で動かして楽しむ、体験、でブラッシュアップを一歩ずつ。小さく始める。
-- ひとまず、16x16、お手軽マトリックス、ペンタトニック、arp音色、ほか音色
-- の前に、ひとまずsingle track前提
-- できればstream demo multi track を早めに作って確認できるとおいしい
-    - multi trackのnode number管理などの責務は、このstep seq側の責務である
-- MML同様、node の番号管理などは、このstep seq側の責務である
-- ひとまずMMLじゃないやつで作るつもり、楽に作って、ノウハウgetして、小さく始める、で、データ蓄積したらMMLも試そう
-- あるいは小さくMMLが試せるなら試すのもいい
+## 使い方
+
+```bash
+npm install
+npm run dev   # ローカル開発
+npm run build # dist 出力
+```
+
+## デプロイ
+
+`.github/workflows/gh-pages.yml` で GitHub Pages に `dist` を artifact として公開します。エントリポイントはルートの `index.html`。
