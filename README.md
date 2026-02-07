@@ -1,6 +1,6 @@
 # tonejs-step-sequencer
 
-Tone.js + `tonejs-json-sequencer` の疎通チェック用デモです。demo-library / streaming demo を参考に、C4 の四分音符が NDJSON ストリーム経由でループ再生されます。
+ Tone.js + `tonejs-json-sequencer` の疎通チェック用デモです。demo-library / streaming demo を参考に、C4 の 16 分音符 16 ステップが NDJSON ストリーム経由でループ再生され、Tone.js の Analyser で波形と FFT をリアルタイム表示します。
 
 ## 使い方
 
