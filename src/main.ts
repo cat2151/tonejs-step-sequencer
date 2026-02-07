@@ -87,14 +87,14 @@ function midiToNoteName(midi: number) {
   return Tone.Frequency(midi, 'midi').toNote()
 }
 
-function noteNameToMidi(noteName: string) {
+function noteNameToMidi(noteName: string, fallbackMidi: number = DEFAULT_MIDI_NOTE) {
   try {
     const midi = Tone.Frequency(noteName).toMidi()
-    if (!Number.isFinite(midi)) return DEFAULT_MIDI_NOTE
+    if (!Number.isFinite(midi)) return clampMidi(fallbackMidi)
     return clampMidi(midi)
   } catch (error) {
-    console.warn('Invalid note name; reverting to default MIDI note.', noteName, error)
-    return DEFAULT_MIDI_NOTE
+    console.warn('Invalid note name; reverting to fallback MIDI note.', noteName, error)
+    return clampMidi(fallbackMidi)
   }
 }
 
@@ -167,6 +167,13 @@ function updateGridActiveStates() {
   })
 }
 
+function updateRowCellLabels(rowIndex: number) {
+  const noteName = rowNoteNames[rowIndex]
+  gridCells[rowIndex]?.forEach((cell, stepIndex) => {
+    cell.setAttribute('aria-label', `Step ${stepIndex + 1}, row ${rowIndex + 1} (${noteName})`)
+  })
+}
+
 function renderNoteGrid() {
   if (!noteGrid) return
   noteGrid.innerHTML = ''
@@ -196,6 +203,7 @@ function renderNoteGrid() {
     input.type = 'text'
     input.className = 'text-input'
     input.value = noteName
+    input.setAttribute('aria-label', `Row ${rowIndex + 1} note`)
     input.addEventListener('change', () => handleRowNoteInputChange(rowIndex, input.value))
     labelWrapper.appendChild(input)
     rowInputs[rowIndex] = input
@@ -206,6 +214,7 @@ function renderNoteGrid() {
       const cell = document.createElement('button')
       cell.type = 'button'
       cell.className = 'note-cell'
+      cell.setAttribute('aria-label', `Step ${step + 1}, row ${rowIndex + 1} (${noteName})`)
       cell.addEventListener('click', () => handleStepSelection(step, rowIndex))
       rowElement.appendChild(cell)
       cells.push(cell)
@@ -256,13 +265,15 @@ function handleStepSelection(stepIndex: number, rowIndex: number) {
 
 function handleRowNoteInputChange(rowIndex: number, value: string) {
   const trimmed = value.trim()
-  const midi = noteNameToMidi(trimmed || rowNoteNames[rowIndex])
+  const previousMidi = noteNameToMidi(rowNoteNames[rowIndex])
+  const midi = noteNameToMidi(trimmed || rowNoteNames[rowIndex], previousMidi)
   const normalized = midiToNoteName(midi)
   rowNoteNames[rowIndex] = normalized
   if (rowInputs[rowIndex]) {
     rowInputs[rowIndex].value = normalized
   }
   updateNoteNumbersForRow(rowIndex, midi)
+  updateRowCellLabels(rowIndex)
   updateGridActiveStates()
   void applySequenceChange()
 }
