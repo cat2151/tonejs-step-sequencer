@@ -30,6 +30,15 @@ const app = document.querySelector<HTMLDivElement>('#app')
 if (app) {
   app.innerHTML = `
     <main class="shell">
+      <section class="panel">
+        <div class="controls">
+          <button id="toggle" type="button" class="primary">Play</button>
+          <div class="status">
+            <span class="dot dot-idle" id="dot"></span>
+            <span id="status-label"></span>
+          </div>
+        </div>
+      </section>
       <section class="panel visuals">
         <div class="visual-header">
           <div class="note-controls">
@@ -51,13 +60,6 @@ if (app) {
         </div>
       </section>
       <section class="panel">
-        <div class="controls">
-          <button id="toggle" type="button" class="primary">Start loop</button>
-          <div class="status">
-            <span class="dot dot-idle" id="dot"></span>
-            <span id="status-label"></span>
-          </div>
-        </div>
         <div class="details">
           <p class="label">NDJSON payload</p>
           <pre id="ndjson"></pre>
@@ -340,14 +342,14 @@ function setStatus(state: 'idle' | 'starting' | 'playing') {
 
   if (state === 'idle') {
     statusDot.className = 'dot dot-idle'
-    toggleButton.textContent = 'Start loop'
+    toggleButton.textContent = 'Play'
     toggleButton.disabled = false
   } else if (state === 'starting') {
     statusDot.className = 'dot dot-pending'
     toggleButton.disabled = true
   } else {
     statusDot.className = 'dot dot-active'
-    toggleButton.textContent = 'Stop loop'
+    toggleButton.textContent = 'Stop'
     toggleButton.disabled = false
   }
 }
