@@ -151,9 +151,15 @@ async function applySequenceChange() {
   buildSequenceFromNotes()
   updateNdjsonDisplay()
 
-  if (player.playing) {
-    stopLoop()
+  const startup = startingPromise
+  if (player.playing || startup) {
     try {
+      if (startup) {
+        await startup
+      }
+      if (player.playing) {
+        stopLoop()
+      }
       await startLoop()
     } catch (error) {
       console.error('Failed to restart loop', error)
@@ -192,6 +198,7 @@ let fftSize: { width: number; height: number } = { width: 0, height: 0 }
 let resizeTimeoutId: number | null = null
 let monitorBus: Tone.Gain | null = null
 let animationFrameId: number | null = null
+let startingPromise: Promise<void> | null = null
 
 function setStatus(state: 'idle' | 'starting' | 'playing') {
   if (!statusLabel || !statusDot || !toggleButton) return
@@ -334,18 +341,35 @@ function stopVisuals() {
 
 async function startLoop() {
   if (player.playing) return
+  if (startingPromise) return startingPromise
 
-  setStatus('starting')
-  await Tone.start()
-  Tone.Transport.stop()
-  Tone.Transport.bpm.value = 120
-  nodes.disposeAll()
-  monitorBus = null
-  setupMonitorBus()
+  const thisStart = (async () => {
+    setStatus('starting')
+    await Tone.start()
+    Tone.Transport.stop()
+    Tone.Transport.bpm.value = 120
+    nodes.disposeAll()
+    monitorBus = null
+    setupMonitorBus()
 
-  await player.start(ndjsonSequence)
-  setStatus('playing')
-  startVisuals()
+    await player.start(ndjsonSequence)
+    setStatus('playing')
+    startVisuals()
+  })()
+
+  startingPromise = thisStart
+  try {
+    await thisStart
+  } catch (error) {
+    console.error('Failed to start loop', error)
+    setStatus('idle')
+    stopVisuals()
+    throw error
+  } finally {
+    if (startingPromise === thisStart) {
+      startingPromise = null
+    }
+  }
 }
 
 function stopLoop() {
