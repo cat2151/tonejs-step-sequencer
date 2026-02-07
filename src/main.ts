@@ -23,7 +23,6 @@ const player = new NDJSONStreamingPlayer(Tone, nodes, {
   loopWaitSeconds: 0,
   lookaheadMs: 60,
   ticksPerQuarter: PPQ,
-  beatsPerMinute: DEFAULT_BPM,
 })
 
 const app = document.querySelector<HTMLDivElement>('#app')
@@ -160,10 +159,10 @@ function buildTimingMap() {
   const startTicks: number[] = []
   let tickCursor = 0
   for (let step = 0; step < STEPS; step++) {
-    startTicks.push(tickCursor)
+    startTicks.push(Math.round(tickCursor))
     tickCursor += getStepTicks(step)
   }
-  return { startTicks, loopTicks: tickCursor }
+  return { startTicks, loopTicks: Math.round(tickCursor) }
 }
 
 function updateLoopNote() {
@@ -315,7 +314,6 @@ function handleBpmInputChange(value: string) {
     bpmInput.value = `${bpm}`
   }
   bpmMap.fill(bpm)
-  Tone.Transport.bpm.value = bpm
   updateLoopNote()
   void applySequenceChange()
 }
@@ -493,7 +491,6 @@ async function startLoop() {
     setStatus('starting')
     await Tone.start()
     Tone.Transport.stop()
-    Tone.Transport.bpm.value = bpmValue
     nodes.disposeAll()
     monitorBus = null
     setupMonitorBus()
