@@ -30,20 +30,8 @@ const app = document.querySelector<HTMLDivElement>('#app')
 if (app) {
   app.innerHTML = `
     <main class="shell">
-      <header class="hero">
-        <p class="eyebrow">Tone.js JSON Sequencer</p>
-        <h1>16-step streaming loop</h1>
-        <p class="lede">
-          Minimal NDJSON streaming demo inspired by the demo-library and streaming sample.
-          It loops sixteen sixteenth notes (default <strong>C4</strong>) with per-step MIDI control using Tone.js.
-        </p>
-      </header>
       <section class="panel visuals">
         <div class="visual-header">
-          <div>
-            <p class="label">Realtime analysis</p>
-            <p class="note">Waveform and FFT refresh ~60 FPS via Tone.Analyser.</p>
-          </div>
           <div class="note-controls">
             <div class="note-controls-header">
               <label class="field" for="bpm-input">
@@ -52,7 +40,6 @@ if (app) {
               </label>
               <div>
                 <p class="label">Note grid</p>
-                <p class="note">Three-note rows (C5/C4/C3). Click per step; left labels are editable.</p>
               </div>
             </div>
             <div class="note-grid" id="note-grid"></div>
@@ -68,7 +55,7 @@ if (app) {
           <button id="toggle" type="button" class="primary">Start loop</button>
           <div class="status">
             <span class="dot dot-idle" id="dot"></span>
-            <span id="status-label">Idle – waiting for user gesture</span>
+            <span id="status-label"></span>
           </div>
         </div>
         <div class="details">
@@ -345,19 +332,20 @@ let startingPromise: Promise<void> | null = null
 let sequenceUpdatePromise: Promise<void> | null = null
 
 function setStatus(state: 'idle' | 'starting' | 'playing') {
-  if (!statusLabel || !statusDot || !toggleButton) return
+  if (!statusDot || !toggleButton) return
+
+  if (statusLabel) {
+    statusLabel.textContent = ''
+  }
 
   if (state === 'idle') {
-    statusLabel.textContent = 'Idle – waiting for user gesture'
     statusDot.className = 'dot dot-idle'
     toggleButton.textContent = 'Start loop'
     toggleButton.disabled = false
   } else if (state === 'starting') {
-    statusLabel.textContent = 'Starting audio context…'
     statusDot.className = 'dot dot-pending'
     toggleButton.disabled = true
   } else {
-    statusLabel.textContent = 'Playing 16-step MIDI sequence in a loop'
     statusDot.className = 'dot dot-active'
     toggleButton.textContent = 'Stop loop'
     toggleButton.disabled = false
