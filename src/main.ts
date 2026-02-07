@@ -5,11 +5,16 @@ import { NDJSONStreamingPlayer, SequencerNodes, type SequenceEvent } from 'tonej
 const MONITOR_NODE_ID = 1
 const STEPS = 16
 const DEFAULT_MIDI_NOTE = 60
+const DEFAULT_BPM = 120
+const DEFAULT_NOTE_ROWS = ['C5', 'C4', 'C3'] as const
 const PPQ = Tone.Transport.PPQ ?? 192
 const SIXTEENTH_TICKS = PPQ / 4
 const LOOP_TICKS = SIXTEENTH_TICKS * STEPS
 
-const noteNumbers = Array.from({ length: STEPS }, () => DEFAULT_MIDI_NOTE)
+const rowNoteNames: string[] = [...DEFAULT_NOTE_ROWS]
+const selectedRows = Array.from({ length: STEPS }, () => 1)
+const noteNumbers = selectedRows.map((row) => noteNameToMidi(rowNoteNames[row]))
+let bpmValue = DEFAULT_BPM
 let ndjsonSequence = ''
 
 const nodes = new SequencerNodes()
@@ -39,11 +44,17 @@ if (app) {
             <p class="note">Waveform and FFT refresh ~60 FPS via Tone.Analyser.</p>
           </div>
           <div class="note-controls">
-            <div>
-              <p class="label">Note numbers (MIDI)</p>
-              <p class="note">Edit each step to reshape the 16-step loop.</p>
+            <div class="note-controls-header">
+              <label class="field" for="bpm-input">
+                <span class="label">BPM</span>
+                <input id="bpm-input" class="text-input" type="number" inputmode="decimal" min="1" max="300" value="${DEFAULT_BPM}">
+              </label>
+              <div>
+                <p class="label">Note grid</p>
+                <p class="note">Three-note rows (C5/C4/C3). Click per step; left labels are editable.</p>
+              </div>
             </div>
-            <div class="note-input-row" id="note-inputs"></div>
+            <div class="note-grid" id="note-grid"></div>
           </div>
         </div>
         <div class="visual-grid">
@@ -62,7 +73,7 @@ if (app) {
         <div class="details">
           <p class="label">NDJSON payload</p>
           <pre id="ndjson"></pre>
-          <p class="note">Loop runs at 120 BPM with a 16-step 16n sequence and explicit loop boundary.</p>
+          <p class="note" id="loop-note">Loop runs at ${DEFAULT_BPM} BPM with a 16-step 16n sequence and explicit loop boundary.</p>
         </div>
       </section>
     </main>
@@ -74,6 +85,17 @@ if (app) {
 
 function midiToNoteName(midi: number) {
   return Tone.Frequency(midi, 'midi').toNote()
+}
+
+function noteNameToMidi(noteName: string, fallbackMidi: number = DEFAULT_MIDI_NOTE) {
+  try {
+    const midi = Tone.Frequency(noteName).toMidi()
+    if (!Number.isFinite(midi)) return clampMidi(fallbackMidi)
+    return clampMidi(midi)
+  } catch (error) {
+    console.warn('Invalid note name; reverting to fallback MIDI note.', noteName, error)
+    return clampMidi(fallbackMidi)
+  }
 }
 
 function buildSequenceFromNotes() {
@@ -106,45 +128,111 @@ function buildSequenceFromNotes() {
   ndjsonSequence = ndjsonEvents.map((event) => JSON.stringify(event)).join('\n')
 }
 
-const noteInputRow = document.querySelector<HTMLDivElement>('#note-inputs')
+const noteGrid = document.querySelector<HTMLDivElement>('#note-grid')
 const ndjsonElement = document.querySelector<HTMLPreElement>('#ndjson')
-const noteInputs: HTMLInputElement[] = []
-
-function renderNoteInputs() {
-  if (!noteInputRow) return
-  noteInputRow.innerHTML = ''
-  noteInputs.length = 0
-
-  noteNumbers.forEach((noteNumber, index) => {
-    const wrapper = document.createElement('label')
-    wrapper.className = 'note-input'
-    const stepLabel = document.createElement('span')
-    stepLabel.className = 'note-index'
-    stepLabel.textContent = `${index + 1}`
-    const input = document.createElement('input')
-    input.type = 'number'
-    input.min = '0'
-    input.max = '127'
-    input.inputMode = 'numeric'
-    input.value = `${noteNumber}`
-    input.addEventListener('change', () => handleNoteInputChange(index, input.value))
-
-    wrapper.appendChild(stepLabel)
-    wrapper.appendChild(input)
-    noteInputRow.appendChild(wrapper)
-    noteInputs.push(input)
-  })
-}
+const loopNoteElement = document.querySelector<HTMLParagraphElement>('#loop-note')
+const bpmInput = document.querySelector<HTMLInputElement>('#bpm-input')
+const rowInputs: HTMLInputElement[] = []
+const gridCells: HTMLButtonElement[][] = []
 
 function clampMidi(value: number) {
   if (!Number.isFinite(value)) return DEFAULT_MIDI_NOTE
   return Math.min(127, Math.max(0, Math.round(value)))
 }
 
+function clampBpm(value: number) {
+  if (!Number.isFinite(value)) return DEFAULT_BPM
+  return Math.min(300, Math.max(1, Math.round(value)))
+}
+
+function updateLoopNote() {
+  if (loopNoteElement) {
+    loopNoteElement.textContent = `Loop runs at ${bpmValue} BPM with a 16-step 16n sequence and explicit loop boundary.`
+  }
+}
+
 function updateNdjsonDisplay() {
   if (ndjsonElement) {
     ndjsonElement.textContent = ndjsonSequence
   }
+}
+
+function updateGridActiveStates() {
+  gridCells.forEach((cells, rowIndex) => {
+    cells.forEach((cell, stepIndex) => {
+      const active = selectedRows[stepIndex] === rowIndex
+      cell.classList.toggle('active', active)
+      cell.setAttribute('aria-pressed', active ? 'true' : 'false')
+    })
+  })
+}
+
+function updateRowCellLabels(rowIndex: number) {
+  const noteName = rowNoteNames[rowIndex]
+  gridCells[rowIndex]?.forEach((cell, stepIndex) => {
+    cell.setAttribute('aria-label', `Step ${stepIndex + 1}, row ${rowIndex + 1} (${noteName})`)
+  })
+}
+
+function renderNoteGrid() {
+  if (!noteGrid) return
+  noteGrid.innerHTML = ''
+  gridCells.length = 0
+  rowInputs.length = 0
+
+  const headerRow = document.createElement('div')
+  headerRow.className = 'note-grid-row note-grid-header'
+  const spacer = document.createElement('div')
+  spacer.className = 'note-row-label'
+  headerRow.appendChild(spacer)
+  for (let step = 0; step < STEPS; step++) {
+    const stepLabel = document.createElement('span')
+    stepLabel.className = 'note-step-label'
+    stepLabel.textContent = `${step + 1}`
+    headerRow.appendChild(stepLabel)
+  }
+  noteGrid.appendChild(headerRow)
+
+  rowNoteNames.forEach((noteName, rowIndex) => {
+    const rowElement = document.createElement('div')
+    rowElement.className = 'note-grid-row'
+
+    const labelWrapper = document.createElement('label')
+    labelWrapper.className = 'note-row-label'
+    const input = document.createElement('input')
+    input.type = 'text'
+    input.className = 'text-input'
+    input.value = noteName
+    input.setAttribute('aria-label', `Row ${rowIndex + 1} note`)
+    input.addEventListener('change', () => handleRowNoteInputChange(rowIndex, input.value))
+    labelWrapper.appendChild(input)
+    rowInputs[rowIndex] = input
+    rowElement.appendChild(labelWrapper)
+
+    const cells: HTMLButtonElement[] = []
+    for (let step = 0; step < STEPS; step++) {
+      const cell = document.createElement('button')
+      cell.type = 'button'
+      cell.className = 'note-cell'
+      cell.setAttribute('aria-label', `Step ${step + 1}, row ${rowIndex + 1} (${noteName})`)
+      cell.addEventListener('click', () => handleStepSelection(step, rowIndex))
+      rowElement.appendChild(cell)
+      cells.push(cell)
+    }
+
+    gridCells[rowIndex] = cells
+    noteGrid.appendChild(rowElement)
+  })
+
+  updateGridActiveStates()
+}
+
+function updateNoteNumbersForRow(rowIndex: number, midiValue: number) {
+  selectedRows.forEach((selectedRow, stepIndex) => {
+    if (selectedRow === rowIndex) {
+      noteNumbers[stepIndex] = midiValue
+    }
+  })
 }
 
 async function applySequenceChange() {
@@ -176,14 +264,37 @@ async function applySequenceChange() {
   }
 }
 
-function handleNoteInputChange(index: number, value: string) {
-  const parsed = Number.parseInt(value, 10)
-  const midi = clampMidi(parsed)
-  noteNumbers[index] = midi
-  if (noteInputs[index]) {
-    noteInputs[index].value = `${midi}`
-  }
+function handleStepSelection(stepIndex: number, rowIndex: number) {
+  selectedRows[stepIndex] = rowIndex
+  noteNumbers[stepIndex] = noteNameToMidi(rowNoteNames[rowIndex])
+  updateGridActiveStates()
   void applySequenceChange()
+}
+
+function handleRowNoteInputChange(rowIndex: number, value: string) {
+  const trimmed = value.trim()
+  const previousMidi = noteNameToMidi(rowNoteNames[rowIndex])
+  const midi = noteNameToMidi(trimmed || rowNoteNames[rowIndex], previousMidi)
+  const normalized = midiToNoteName(midi)
+  rowNoteNames[rowIndex] = normalized
+  if (rowInputs[rowIndex]) {
+    rowInputs[rowIndex].value = normalized
+  }
+  updateNoteNumbersForRow(rowIndex, midi)
+  updateRowCellLabels(rowIndex)
+  updateGridActiveStates()
+  void applySequenceChange()
+}
+
+function handleBpmInputChange(value: string) {
+  const parsed = Number.parseFloat(value)
+  const bpm = clampBpm(parsed)
+  bpmValue = bpm
+  if (bpmInput) {
+    bpmInput.value = `${bpm}`
+  }
+  Tone.Transport.bpm.value = bpm
+  updateLoopNote()
 }
 
 const toggleButton = document.querySelector<HTMLButtonElement>('#toggle')
@@ -194,9 +305,12 @@ const fftCanvas = document.querySelector<HTMLCanvasElement>('#fft')
 const waveformCtx = waveformCanvas?.getContext('2d')
 const fftCtx = fftCanvas?.getContext('2d')
 
-renderNoteInputs()
+renderNoteGrid()
 buildSequenceFromNotes()
+updateLoopNote()
 updateNdjsonDisplay()
+
+bpmInput?.addEventListener('change', () => handleBpmInputChange(bpmInput.value))
 
 const waveformAnalyser = new Tone.Analyser('waveform', 1024)
 const fftAnalyser = new Tone.Analyser('fft', 128)
@@ -356,7 +470,7 @@ async function startLoop() {
     setStatus('starting')
     await Tone.start()
     Tone.Transport.stop()
-    Tone.Transport.bpm.value = 120
+    Tone.Transport.bpm.value = bpmValue
     nodes.disposeAll()
     monitorBus = null
     setupMonitorBus()
