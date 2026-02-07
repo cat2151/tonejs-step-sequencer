@@ -9,19 +9,20 @@ const DEFAULT_BPM = 120
 const DEFAULT_NOTE_ROWS = ['C5', 'C4', 'C3'] as const
 const PPQ = Tone.Transport.PPQ ?? 192
 const SIXTEENTH_TICKS = PPQ / 4
-const LOOP_TICKS = SIXTEENTH_TICKS * STEPS
 
 const rowNoteNames: string[] = [...DEFAULT_NOTE_ROWS]
 const selectedRows = Array.from({ length: STEPS }, () => 1)
 const noteNumbers = selectedRows.map((row) => noteNameToMidi(rowNoteNames[row]))
 let bpmValue = DEFAULT_BPM
 let ndjsonSequence = ''
+const bpmMap = Array.from({ length: STEPS }, () => DEFAULT_BPM)
 
 const nodes = new SequencerNodes()
 const player = new NDJSONStreamingPlayer(Tone, nodes, {
   loop: true,
   loopWaitSeconds: 0,
   lookaheadMs: 60,
+  ticksPerQuarter: PPQ,
 })
 
 const app = document.querySelector<HTMLDivElement>('#app')
@@ -99,10 +100,11 @@ function noteNameToMidi(noteName: string, fallbackMidi: number = DEFAULT_MIDI_NO
 }
 
 function buildSequenceFromNotes() {
+  const { startTicks, loopTicks } = buildTimingMap()
   const noteEvents: SequenceEvent[] = noteNumbers.map((noteNumber, index) => ({
     eventType: 'triggerAttackRelease',
     nodeId: 0,
-    args: [midiToNoteName(noteNumber), '16n', `+${index * SIXTEENTH_TICKS}i`],
+    args: [midiToNoteName(noteNumber), '16n', `+${startTicks[index]}i`],
   }))
 
   const ndjsonEvents: SequenceEvent[] = [
@@ -121,7 +123,7 @@ function buildSequenceFromNotes() {
     {
       eventType: 'loopEnd',
       nodeId: 0,
-      args: [`${LOOP_TICKS}i`],
+      args: [`${loopTicks}i`],
     },
   ]
 
@@ -143,6 +145,24 @@ function clampMidi(value: number) {
 function clampBpm(value: number) {
   if (!Number.isFinite(value)) return DEFAULT_BPM
   return Math.min(300, Math.max(1, Math.round(value)))
+}
+
+function getStepBpm(stepIndex: number) {
+  return clampBpm(bpmMap[stepIndex] ?? DEFAULT_BPM)
+}
+
+function getStepTicks(stepIndex: number) {
+  return SIXTEENTH_TICKS * (DEFAULT_BPM / getStepBpm(stepIndex))
+}
+
+function buildTimingMap() {
+  const startTicks: number[] = []
+  let tickCursor = 0
+  for (let step = 0; step < STEPS; step++) {
+    startTicks.push(Math.round(tickCursor))
+    tickCursor += getStepTicks(step)
+  }
+  return { startTicks, loopTicks: Math.round(tickCursor) }
 }
 
 function updateLoopNote() {
@@ -293,8 +313,9 @@ function handleBpmInputChange(value: string) {
   if (bpmInput) {
     bpmInput.value = `${bpm}`
   }
-  Tone.Transport.bpm.value = bpm
+  bpmMap.fill(bpm)
   updateLoopNote()
+  void applySequenceChange()
 }
 
 const toggleButton = document.querySelector<HTMLButtonElement>('#toggle')
@@ -470,7 +491,6 @@ async function startLoop() {
     setStatus('starting')
     await Tone.start()
     Tone.Transport.stop()
-    Tone.Transport.bpm.value = bpmValue
     nodes.disposeAll()
     monitorBus = null
     setupMonitorBus()
