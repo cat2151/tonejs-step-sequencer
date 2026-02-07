@@ -152,19 +152,18 @@ async function applySequenceChange() {
   updateNdjsonDisplay()
 
   const startup = startingPromise
-  if (player.playing || startup) {
-    try {
-      if (startup) {
-        await startup
-      }
-      if (player.playing) {
-        stopLoop()
-      }
-      await startLoop()
-    } catch (error) {
-      console.error('Failed to restart loop', error)
-      setStatus('idle')
+  if (!player.playing && !startup) return
+
+  try {
+    if (startup) {
+      await startup
     }
+    if (player.playing) {
+      await player.start(ndjsonSequence)
+    }
+  } catch (error) {
+    console.error('Failed to apply sequence update', error)
+    setStatus('idle')
   }
 }
 
