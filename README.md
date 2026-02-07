@@ -13,6 +13,7 @@
 - ひとまず、16x16、お手軽マトリックス、ペンタトニック、arp音色、ほか音色
 - の前に、ひとまずsingle track前提
 - できればstream demo multi track を早めに作って確認できるとおいしい
+    - multi trackのnode number管理などの責務は、このstep seq側の責務である
 - MML同様、node の番号管理などは、このstep seq側の責務である
 - ひとまずMMLじゃないやつで作るつもり、楽に作って、ノウハウgetして、小さく始める、で、データ蓄積したらMMLも試そう
 - あるいは小さくMMLが試せるなら試すのもいい
