@@ -4,37 +4,13 @@ import { NDJSONStreamingPlayer, SequencerNodes, type SequenceEvent } from 'tonej
 
 const MONITOR_NODE_ID = 1
 const STEPS = 16
+const DEFAULT_MIDI_NOTE = 60
 const PPQ = Tone.Transport.PPQ ?? 192
 const SIXTEENTH_TICKS = PPQ / 4
 const LOOP_TICKS = SIXTEENTH_TICKS * STEPS
 
-const noteEvents: SequenceEvent[] = Array.from({ length: STEPS }, (_, index): SequenceEvent => ({
-  eventType: 'triggerAttackRelease',
-  nodeId: 0,
-  args: ['C4', '16n', `+${index * SIXTEENTH_TICKS}i`],
-}))
-
-const ndjsonEvents: SequenceEvent[] = [
-  {
-    eventType: 'createNode',
-    nodeId: 0,
-    nodeType: 'Synth',
-    args: { oscillator: { type: 'triangle' } },
-  },
-  {
-    eventType: 'connect',
-    nodeId: 0,
-    connectTo: MONITOR_NODE_ID,
-  },
-  ...noteEvents,
-  {
-    eventType: 'loopEnd',
-    nodeId: 0,
-    args: [`${LOOP_TICKS}i`],
-  },
-]
-
-const ndjsonSequence = ndjsonEvents.map((event) => JSON.stringify(event)).join('\n')
+const noteNumbers = Array.from({ length: STEPS }, () => DEFAULT_MIDI_NOTE)
+let ndjsonSequence = ''
 
 const nodes = new SequencerNodes()
 const player = new NDJSONStreamingPlayer(Tone, nodes, {
@@ -53,9 +29,28 @@ if (app) {
         <h1>16-step streaming loop</h1>
         <p class="lede">
           Minimal NDJSON streaming demo inspired by the demo-library and streaming sample.
-          It loops sixteen <strong>C4</strong> sixteenth notes using Tone.js.
+          It loops sixteen sixteenth notes (default <strong>C4</strong>) with per-step MIDI control using Tone.js.
         </p>
       </header>
+      <section class="panel visuals">
+        <div class="visual-header">
+          <div>
+            <p class="label">Realtime analysis</p>
+            <p class="note">Waveform and FFT refresh ~60 FPS via Tone.Analyser.</p>
+          </div>
+          <div class="note-controls">
+            <div>
+              <p class="label">Note numbers (MIDI)</p>
+              <p class="note">Edit each step to reshape the 16-step loop.</p>
+            </div>
+            <div class="note-input-row" id="note-inputs"></div>
+          </div>
+        </div>
+        <div class="visual-grid">
+          <canvas id="waveform" width="720" height="160" role="img" aria-label="Waveform display"></canvas>
+          <canvas id="fft" width="720" height="160" role="img" aria-label="FFT display"></canvas>
+        </div>
+      </section>
       <section class="panel">
         <div class="controls">
           <button id="toggle" type="button" class="primary">Start loop</button>
@@ -66,24 +61,121 @@ if (app) {
         </div>
         <div class="details">
           <p class="label">NDJSON payload</p>
-          <pre id="ndjson">${ndjsonSequence}</pre>
+          <pre id="ndjson"></pre>
           <p class="note">Loop runs at 120 BPM with a 16-step 16n sequence and explicit loop boundary.</p>
         </div>
       </section>
-      <section class="panel visuals">
-        <div class="visual-header">
-          <div>
-            <p class="label">Realtime analysis</p>
-            <p class="note">Waveform and FFT refresh ~60 FPS via Tone.Analyser.</p>
-          </div>
-        </div>
-        <div class="visual-grid">
-          <canvas id="waveform" width="720" height="160" role="img" aria-label="Waveform display"></canvas>
-          <canvas id="fft" width="720" height="160" role="img" aria-label="FFT display"></canvas>
-        </div>
-      </section>
     </main>
+    <a class="repo-link" href="https://github.com/cat2151/tonejs-step-sequencer" target="_blank" rel="noreferrer noopener">
+      cat2151/tonejs-step-sequencer
+    </a>
   `
+}
+
+function midiToNoteName(midi: number) {
+  return Tone.Frequency(midi, 'midi').toNote()
+}
+
+function buildSequenceFromNotes() {
+  const noteEvents: SequenceEvent[] = noteNumbers.map((noteNumber, index) => ({
+    eventType: 'triggerAttackRelease',
+    nodeId: 0,
+    args: [midiToNoteName(noteNumber), '16n', `+${index * SIXTEENTH_TICKS}i`],
+  }))
+
+  const ndjsonEvents: SequenceEvent[] = [
+    {
+      eventType: 'createNode',
+      nodeId: 0,
+      nodeType: 'Synth',
+      args: { oscillator: { type: 'triangle' } },
+    },
+    {
+      eventType: 'connect',
+      nodeId: 0,
+      connectTo: MONITOR_NODE_ID,
+    },
+    ...noteEvents,
+    {
+      eventType: 'loopEnd',
+      nodeId: 0,
+      args: [`${LOOP_TICKS}i`],
+    },
+  ]
+
+  ndjsonSequence = ndjsonEvents.map((event) => JSON.stringify(event)).join('\n')
+}
+
+const noteInputRow = document.querySelector<HTMLDivElement>('#note-inputs')
+const ndjsonElement = document.querySelector<HTMLPreElement>('#ndjson')
+const noteInputs: HTMLInputElement[] = []
+
+function renderNoteInputs() {
+  if (!noteInputRow) return
+  noteInputRow.innerHTML = ''
+  noteInputs.length = 0
+
+  noteNumbers.forEach((noteNumber, index) => {
+    const wrapper = document.createElement('label')
+    wrapper.className = 'note-input'
+    const stepLabel = document.createElement('span')
+    stepLabel.className = 'note-index'
+    stepLabel.textContent = `${index + 1}`
+    const input = document.createElement('input')
+    input.type = 'number'
+    input.min = '0'
+    input.max = '127'
+    input.inputMode = 'numeric'
+    input.value = `${noteNumber}`
+    input.addEventListener('change', () => handleNoteInputChange(index, input.value))
+
+    wrapper.appendChild(stepLabel)
+    wrapper.appendChild(input)
+    noteInputRow.appendChild(wrapper)
+    noteInputs.push(input)
+  })
+}
+
+function clampMidi(value: number) {
+  if (!Number.isFinite(value)) return DEFAULT_MIDI_NOTE
+  return Math.min(127, Math.max(0, Math.round(value)))
+}
+
+function updateNdjsonDisplay() {
+  if (ndjsonElement) {
+    ndjsonElement.textContent = ndjsonSequence
+  }
+}
+
+async function applySequenceChange() {
+  buildSequenceFromNotes()
+  updateNdjsonDisplay()
+
+  const startup = startingPromise
+  if (player.playing || startup) {
+    try {
+      if (startup) {
+        await startup
+      }
+      if (player.playing) {
+        stopLoop()
+      }
+      await startLoop()
+    } catch (error) {
+      console.error('Failed to restart loop', error)
+      setStatus('idle')
+    }
+  }
+}
+
+function handleNoteInputChange(index: number, value: string) {
+  const parsed = Number.parseInt(value, 10)
+  const midi = clampMidi(parsed)
+  noteNumbers[index] = midi
+  if (noteInputs[index]) {
+    noteInputs[index].value = `${midi}`
+  }
+  void applySequenceChange()
 }
 
 const toggleButton = document.querySelector<HTMLButtonElement>('#toggle')
@@ -94,6 +186,10 @@ const fftCanvas = document.querySelector<HTMLCanvasElement>('#fft')
 const waveformCtx = waveformCanvas?.getContext('2d')
 const fftCtx = fftCanvas?.getContext('2d')
 
+renderNoteInputs()
+buildSequenceFromNotes()
+updateNdjsonDisplay()
+
 const waveformAnalyser = new Tone.Analyser('waveform', 1024)
 const fftAnalyser = new Tone.Analyser('fft', 128)
 
@@ -102,6 +198,7 @@ let fftSize: { width: number; height: number } = { width: 0, height: 0 }
 let resizeTimeoutId: number | null = null
 let monitorBus: Tone.Gain | null = null
 let animationFrameId: number | null = null
+let startingPromise: Promise<void> | null = null
 
 function setStatus(state: 'idle' | 'starting' | 'playing') {
   if (!statusLabel || !statusDot || !toggleButton) return
@@ -116,7 +213,7 @@ function setStatus(state: 'idle' | 'starting' | 'playing') {
     statusDot.className = 'dot dot-pending'
     toggleButton.disabled = true
   } else {
-    statusLabel.textContent = 'Playing 16-step C4 sixteenth notes in a loop'
+    statusLabel.textContent = 'Playing 16-step MIDI sequence in a loop'
     statusDot.className = 'dot dot-active'
     toggleButton.textContent = 'Stop loop'
     toggleButton.disabled = false
@@ -244,18 +341,35 @@ function stopVisuals() {
 
 async function startLoop() {
   if (player.playing) return
+  if (startingPromise) return startingPromise
 
-  setStatus('starting')
-  await Tone.start()
-  Tone.Transport.stop()
-  Tone.Transport.bpm.value = 120
-  nodes.disposeAll()
-  monitorBus = null
-  setupMonitorBus()
+  const thisStart = (async () => {
+    setStatus('starting')
+    await Tone.start()
+    Tone.Transport.stop()
+    Tone.Transport.bpm.value = 120
+    nodes.disposeAll()
+    monitorBus = null
+    setupMonitorBus()
 
-  await player.start(ndjsonSequence)
-  setStatus('playing')
-  startVisuals()
+    await player.start(ndjsonSequence)
+    setStatus('playing')
+    startVisuals()
+  })()
+
+  startingPromise = thisStart
+  try {
+    await thisStart
+  } catch (error) {
+    console.error('Failed to start loop', error)
+    setStatus('idle')
+    stopVisuals()
+    throw error
+  } finally {
+    if (startingPromise === thisStart) {
+      startingPromise = null
+    }
+  }
 }
 
 function stopLoop() {
