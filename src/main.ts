@@ -154,16 +154,25 @@ async function applySequenceChange() {
   const startup = startingPromise
   if (!player.playing && !startup) return
 
-  try {
+  const thisUpdate = (sequenceUpdatePromise ?? Promise.resolve()).then(async () => {
     if (startup) {
       await startup
     }
-    if (player.playing) {
-      await player.start(ndjsonSequence)
-    }
+    if (!player.playing) return
+    await player.start(ndjsonSequence)
+  })
+
+  sequenceUpdatePromise = thisUpdate
+
+  try {
+    await thisUpdate
   } catch (error) {
     console.error('Failed to apply sequence update', error)
-    setStatus('idle')
+    stopLoop()
+  } finally {
+    if (sequenceUpdatePromise === thisUpdate) {
+      sequenceUpdatePromise = null
+    }
   }
 }
 
@@ -198,6 +207,7 @@ let resizeTimeoutId: number | null = null
 let monitorBus: Tone.Gain | null = null
 let animationFrameId: number | null = null
 let startingPromise: Promise<void> | null = null
+let sequenceUpdatePromise: Promise<void> | null = null
 
 function setStatus(state: 'idle' | 'starting' | 'playing') {
   if (!statusLabel || !statusDot || !toggleButton) return
