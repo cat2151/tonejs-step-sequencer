@@ -135,6 +135,72 @@ h1 {
   width: 100%;
 }
 
+.tone-section {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.65rem 0.75rem;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.tone-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.tone-toggle {
+  border: 1px solid var(--border);
+  background: rgba(124, 242, 194, 0.1);
+  color: #e7eaf2;
+  border-radius: 10px;
+  padding: 0.5rem 0.9rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease, transform 120ms ease;
+}
+
+.tone-toggle:hover {
+  border-color: rgba(124, 242, 194, 0.6);
+  transform: translateY(-1px);
+}
+
+.tone-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.tone-status {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.tone-status-ok {
+  color: var(--accent);
+}
+
+.tone-status-error {
+  color: #ff9c9c;
+}
+
+.tone-body {
+  display: grid;
+  gap: 0.6rem;
+  margin-top: 0.6rem;
+}
+
+.tone-body.collapsed {
+  display: none;
+}
+
+.tone-textarea {
+  min-height: 92px;
+  font-family: 'JetBrains Mono', 'SFMono-Regular', Menlo, monospace;
+  resize: vertical;
+}
+
 .group-label {
   margin: 0.25rem 0 0.1rem;
   font-size: 0.82rem;
