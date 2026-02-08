@@ -177,6 +177,10 @@ h1 {
   color: var(--muted);
 }
 
+.tone-status-ok {
+  color: var(--accent);
+}
+
 .tone-status-error {
   color: #ff9c9c;
 }

@@ -213,17 +213,36 @@ function normalizeToneEvents(events: SequenceEvent[], group: Group) {
     }
   })
 
+  const instrumentTypes = new Set([
+    'Synth',
+    'AMSynth',
+    'FMSynth',
+    'MonoSynth',
+    'DuoSynth',
+    'MembraneSynth',
+    'MetalSynth',
+    'PluckSynth',
+    'Sampler',
+    'PolySynth',
+  ])
+  const instrumentCreate = normalized.find(
+    (event) =>
+      (event as { eventType?: string }).eventType === 'createNode' &&
+      instrumentTypes.has((event as { nodeType?: string }).nodeType ?? ''),
+  ) as { nodeId?: number } | undefined
   const firstCreate = normalized.find(
     (event) => (event as { eventType?: string }).eventType === 'createNode',
   ) as { nodeId?: number } | undefined
-  const instrumentNodeId = typeof firstCreate?.nodeId === 'number'
-    ? firstCreate.nodeId
-    : idMap.values().next().value ?? baseNodeId
+  const instrumentNodeId =
+    typeof instrumentCreate?.nodeId === 'number'
+      ? instrumentCreate.nodeId
+      : typeof firstCreate?.nodeId === 'number'
+        ? firstCreate.nodeId
+        : idMap.values().next().value ?? baseNodeId
   return { events: normalized, instrumentNodeId }
 }
 
 async function applyMmlToToneState(group: Group, mmlText: string) {
-  toneStates[group].mmlText = mmlText
   try {
     await ensureMmlReady()
     const parsed = mml2json(mmlText) as unknown as SequenceEvent[]
@@ -231,6 +250,7 @@ async function applyMmlToToneState(group: Group, mmlText: string) {
     toneStates[group].events = normalized.events
     toneStates[group].instrumentNodeId = normalized.instrumentNodeId
     toneStates[group].jsonText = JSON.stringify(normalized.events, null, 2)
+    toneStates[group].mmlText = mmlText
     toneStates[group].error = ''
   } catch (error) {
     console.error('Failed to convert MML', error)
@@ -239,7 +259,6 @@ async function applyMmlToToneState(group: Group, mmlText: string) {
 }
 
 function applyJsonToToneState(group: Group, jsonText: string) {
-  toneStates[group].jsonText = jsonText
   try {
     const parsed = JSON.parse(jsonText) as SequenceEvent[]
     const normalized = normalizeToneEvents(parsed, group)
