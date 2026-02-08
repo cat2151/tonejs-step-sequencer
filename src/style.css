@@ -135,6 +135,15 @@ h1 {
   width: 100%;
 }
 
+.group-label {
+  margin: 0.25rem 0 0.1rem;
+  font-size: 0.82rem;
+  color: var(--muted);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
 .note-grid-row {
   display: grid;
   grid-template-columns: 80px repeat(16, minmax(34px, 1fr));

@@ -6,13 +6,19 @@ const MONITOR_NODE_ID = 1
 const STEPS = 16
 const DEFAULT_MIDI_NOTE = 60
 const DEFAULT_BPM = 120
-const DEFAULT_NOTE_ROWS = ['C5', 'C4', 'C3'] as const
+const DEFAULT_NOTE_ROWS = ['C5', 'C4', 'C3', 'C2', 'C1', 'C0'] as const
+const GROUP_SIZE = 3
+const GROUP_A_NODE_ID = 0
+const GROUP_B_NODE_ID = 2
 const PPQ = Tone.Transport.PPQ ?? 192
 const SIXTEENTH_TICKS = PPQ / 4
+type Group = 'A' | 'B'
 
 const rowNoteNames: string[] = [...DEFAULT_NOTE_ROWS]
-const selectedRows = Array.from({ length: STEPS }, () => 1)
-const noteNumbers = selectedRows.map((row) => noteNameToMidi(rowNoteNames[row]))
+const selectedRowsA = Array.from({ length: STEPS }, () => 1)
+const selectedRowsB = Array.from({ length: STEPS }, () => GROUP_SIZE + 1)
+const noteNumbersA = selectedRowsA.map((row) => noteNameToMidi(rowNoteNames[row]))
+const noteNumbersB = selectedRowsB.map((row) => noteNameToMidi(rowNoteNames[row]))
 let bpmValue = DEFAULT_BPM
 let ndjsonSequence = ''
 const bpmMap = Array.from({ length: STEPS }, () => DEFAULT_BPM)
@@ -88,30 +94,68 @@ function noteNameToMidi(noteName: string, fallbackMidi: number = DEFAULT_MIDI_NO
   }
 }
 
+function rowIndexToGroup(rowIndex: number): Group {
+  return rowIndex < GROUP_SIZE ? 'A' : 'B'
+}
+
+function getSelections(group: Group) {
+  return group === 'A' ? selectedRowsA : selectedRowsB
+}
+
+function getNoteNumbers(group: Group) {
+  return group === 'A' ? noteNumbersA : noteNumbersB
+}
+
 function buildSequenceFromNotes() {
   const { startTicks, loopTicks } = buildTimingMap()
-  const noteEvents: SequenceEvent[] = noteNumbers.map((noteNumber, index) => ({
-    eventType: 'triggerAttackRelease',
-    nodeId: 0,
-    args: [midiToNoteName(noteNumber), '16n', `+${startTicks[index]}i`],
-  }))
+  const noteEvents: SequenceEvent[] = []
+  for (let step = 0; step < STEPS; step++) {
+    noteEvents.push(
+      {
+        eventType: 'triggerAttackRelease',
+        nodeId: GROUP_A_NODE_ID,
+        args: [midiToNoteName(noteNumbersA[step]), '16n', `+${startTicks[step]}i`],
+      },
+      {
+        eventType: 'triggerAttackRelease',
+        nodeId: GROUP_B_NODE_ID,
+        args: [midiToNoteName(noteNumbersB[step]), '16n', `+${startTicks[step]}i`],
+      },
+    )
+  }
 
   const ndjsonEvents: SequenceEvent[] = [
     {
       eventType: 'createNode',
-      nodeId: 0,
+      nodeId: GROUP_A_NODE_ID,
       nodeType: 'Synth',
       args: { oscillator: { type: 'triangle' } },
     },
     {
       eventType: 'connect',
-      nodeId: 0,
+      nodeId: GROUP_A_NODE_ID,
+      connectTo: MONITOR_NODE_ID,
+    },
+    {
+      eventType: 'createNode',
+      nodeId: GROUP_B_NODE_ID,
+      nodeType: 'Synth',
+      args: { oscillator: { type: 'triangle' } },
+    },
+    {
+      eventType: 'connect',
+      nodeId: GROUP_B_NODE_ID,
       connectTo: MONITOR_NODE_ID,
     },
     ...noteEvents,
     {
       eventType: 'loopEnd',
-      nodeId: 0,
+      nodeId: GROUP_A_NODE_ID,
+      args: [`${loopTicks}i`],
+    },
+    {
+      eventType: 'loopEnd',
+      nodeId: GROUP_B_NODE_ID,
       args: [`${loopTicks}i`],
     },
   ]
@@ -168,8 +212,9 @@ function updateNdjsonDisplay() {
 
 function updateGridActiveStates() {
   gridCells.forEach((cells, rowIndex) => {
+    const selections = getSelections(rowIndexToGroup(rowIndex))
     cells.forEach((cell, stepIndex) => {
-      const active = selectedRows[stepIndex] === rowIndex
+      const active = selections[stepIndex] === rowIndex
       cell.classList.toggle('active', active)
       cell.setAttribute('aria-pressed', active ? 'true' : 'false')
     })
@@ -203,6 +248,13 @@ function renderNoteGrid() {
   noteGrid.appendChild(headerRow)
 
   rowNoteNames.forEach((noteName, rowIndex) => {
+    if (rowIndex === 0 || rowIndex === GROUP_SIZE) {
+      const groupLabel = document.createElement('p')
+      groupLabel.className = 'group-label'
+      groupLabel.textContent = rowIndex === 0 ? 'Group A' : 'Group B'
+      noteGrid.appendChild(groupLabel)
+    }
+
     const rowElement = document.createElement('div')
     rowElement.className = 'note-grid-row'
 
@@ -237,9 +289,12 @@ function renderNoteGrid() {
 }
 
 function updateNoteNumbersForRow(rowIndex: number, midiValue: number) {
-  selectedRows.forEach((selectedRow, stepIndex) => {
+  const group = rowIndexToGroup(rowIndex)
+  const selections = getSelections(group)
+  const notes = getNoteNumbers(group)
+  selections.forEach((selectedRow, stepIndex) => {
     if (selectedRow === rowIndex) {
-      noteNumbers[stepIndex] = midiValue
+      notes[stepIndex] = midiValue
     }
   })
 }
@@ -274,8 +329,11 @@ async function applySequenceChange() {
 }
 
 function handleStepSelection(stepIndex: number, rowIndex: number) {
-  selectedRows[stepIndex] = rowIndex
-  noteNumbers[stepIndex] = noteNameToMidi(rowNoteNames[rowIndex])
+  const group = rowIndexToGroup(rowIndex)
+  const selections = getSelections(group)
+  const notes = getNoteNumbers(group)
+  selections[stepIndex] = rowIndex
+  notes[stepIndex] = noteNameToMidi(rowNoteNames[rowIndex])
   updateGridActiveStates()
   void applySequenceChange()
 }
