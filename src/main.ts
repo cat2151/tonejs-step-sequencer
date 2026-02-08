@@ -1,6 +1,7 @@
 import './style.css'
 import * as Tone from 'tone'
 import { NDJSONStreamingPlayer, SequencerNodes, type SequenceEvent } from 'tonejs-json-sequencer'
+import { initWasm as initMmlWasm, mml2json } from 'tonejs-mml-to-json'
 
 const MONITOR_NODE_ID = 1
 const STEPS = 16
@@ -8,11 +9,249 @@ const DEFAULT_MIDI_NOTE = 60
 const DEFAULT_BPM = 120
 const DEFAULT_NOTE_ROWS = ['C5', 'C4', 'C3', 'C2', 'C1', 'C0'] as const
 const GROUP_SIZE = 3
-const GROUP_A_NODE_ID = 0
-const GROUP_B_NODE_ID = 2
+const GROUP_A_NODE_ID = 10
+const GROUP_B_NODE_ID = 20
 const PPQ = Tone.Transport.PPQ ?? 192
 const SIXTEENTH_TICKS = PPQ / 4
 type Group = 'A' | 'B'
+
+type TonePreset = {
+  id: string
+  label: string
+  mml: string
+}
+
+type ToneState = {
+  presetId: string
+  mmlText: string
+  jsonText: string
+  events: SequenceEvent[]
+  instrumentNodeId: number
+  open: boolean
+  error: string
+}
+
+type ToneControls = {
+  toggle: HTMLButtonElement
+  body: HTMLDivElement
+  presetSelect: HTMLSelectElement
+  mmlTextarea: HTMLTextAreaElement
+  jsonTextarea: HTMLTextAreaElement
+  status: HTMLSpanElement
+}
+
+const TONE_EVENT_TYPES = new Set(['createNode', 'connect', 'set'])
+
+const tonePresets: TonePreset[] = [
+  {
+    id: 'fm-pingpong',
+    label: 'FMSynth + PingPongDelay',
+    mml: `@FMSynth{
+  "harmonicity": 3,
+  "modulationIndex": 10,
+  "envelope": {
+    "attack": 0.02,
+    "decay": 0.15,
+    "sustain": 0.6,
+    "release": 0.8
+  }
+}
+@PingPongDelay{
+  "delayTime": "8n",
+  "feedback": 0.35
+}
+o4 l8 cdefgab<c`,
+  },
+  {
+    id: 'mono-chebyshev',
+    label: 'MonoSynth + Chebyshev',
+    mml: `@MonoSynth{
+  "filter": {
+    "Q": 2,
+    "type": "lowpass",
+    "rolloff": -12
+  },
+  "envelope": {
+    "attack": 0.05,
+    "decay": 0.3,
+    "sustain": 0.2,
+    "release": 1.2
+  }
+}
+@Chebyshev{
+  "order": 32,
+  "oversample": "2x"
+}
+o3 l8 c c d d# f f g g`,
+  },
+  {
+    id: 'synth-chorus',
+    label: 'Synth + Chorus',
+    mml: `@Synth{
+  "oscillator": {
+    "type": "sawtooth"
+  },
+  "envelope": {
+    "attack": 0.08,
+    "decay": 0.2,
+    "sustain": 0.4,
+    "release": 0.9
+  }
+}
+@Chorus{
+  "frequency": 4,
+  "delayTime": 2.5,
+  "depth": 0.6
+}
+o4 l8 c e g c e g<c`,
+  },
+]
+
+const toneStates: Record<Group, ToneState> = {
+  A: {
+    presetId: 'fm-pingpong',
+    mmlText: tonePresets[0]?.mml ?? '',
+    jsonText: '',
+    events: [],
+    instrumentNodeId: GROUP_A_NODE_ID,
+    open: false,
+    error: '',
+  },
+  B: {
+    presetId: 'mono-chebyshev',
+    mmlText: tonePresets[1]?.mml ?? '',
+    jsonText: '',
+    events: [],
+    instrumentNodeId: GROUP_B_NODE_ID,
+    open: false,
+    error: '',
+  },
+}
+
+const toneControls: Partial<Record<Group, ToneControls>> = {}
+let mmlInitPromise: Promise<void> | null = null
+
+function getPresetById(id: string) {
+  return tonePresets.find((preset) => preset.id === id)
+}
+
+function buildFallbackToneConfig(group: Group) {
+  const nodeId = group === 'A' ? GROUP_A_NODE_ID : GROUP_B_NODE_ID
+  const events: SequenceEvent[] = [
+    {
+      eventType: 'createNode',
+      nodeId,
+      nodeType: 'Synth',
+      args: { oscillator: { type: 'triangle' } },
+    },
+    {
+      eventType: 'connect',
+      nodeId,
+      connectTo: MONITOR_NODE_ID,
+    },
+  ]
+  return { events, instrumentNodeId: nodeId }
+}
+
+function primeToneState(group: Group) {
+  const fallback = buildFallbackToneConfig(group)
+  toneStates[group].events = fallback.events
+  toneStates[group].instrumentNodeId = fallback.instrumentNodeId
+  toneStates[group].jsonText = JSON.stringify(fallback.events, null, 2)
+}
+
+primeToneState('A')
+primeToneState('B')
+
+async function ensureMmlReady() {
+  if (!mmlInitPromise) {
+    mmlInitPromise = initMmlWasm()
+  }
+  await mmlInitPromise
+}
+
+function normalizeToneEvents(events: SequenceEvent[], group: Group) {
+  const baseNodeId = group === 'A' ? GROUP_A_NODE_ID : GROUP_B_NODE_ID
+  let nextNodeId = baseNodeId
+  const idMap = new Map<number, number>()
+  const mapId = (id: unknown) => {
+    if (typeof id !== 'number') return null
+    if (!idMap.has(id)) {
+      idMap.set(id, nextNodeId)
+      nextNodeId += 1
+    }
+    return idMap.get(id) ?? null
+  }
+
+  const normalized: SequenceEvent[] = []
+
+  events.forEach((event) => {
+    const eventType = (event as { eventType?: string }).eventType
+    if (!eventType || !TONE_EVENT_TYPES.has(eventType)) return
+
+    const nodeId = mapId((event as { nodeId?: unknown }).nodeId) ?? baseNodeId
+
+    if (eventType === 'connect') {
+      const rawConnectTo = (event as { connectTo?: unknown }).connectTo
+      const connectTo =
+        rawConnectTo === 'toDestination'
+          ? MONITOR_NODE_ID
+          : rawConnectTo === MONITOR_NODE_ID
+            ? MONITOR_NODE_ID
+            : mapId(rawConnectTo) ?? MONITOR_NODE_ID
+
+      normalized.push({
+        ...(event as SequenceEvent),
+        nodeId,
+        connectTo,
+      } as SequenceEvent)
+    } else {
+      normalized.push({
+        ...(event as SequenceEvent),
+        nodeId,
+      } as SequenceEvent)
+    }
+  })
+
+  const firstCreate = normalized.find(
+    (event) => (event as { eventType?: string }).eventType === 'createNode',
+  ) as { nodeId?: number } | undefined
+  const instrumentNodeId = typeof firstCreate?.nodeId === 'number'
+    ? firstCreate.nodeId
+    : idMap.values().next().value ?? baseNodeId
+  return { events: normalized, instrumentNodeId }
+}
+
+async function applyMmlToToneState(group: Group, mmlText: string) {
+  toneStates[group].mmlText = mmlText
+  try {
+    await ensureMmlReady()
+    const parsed = mml2json(mmlText) as unknown as SequenceEvent[]
+    const normalized = normalizeToneEvents(parsed, group)
+    toneStates[group].events = normalized.events
+    toneStates[group].instrumentNodeId = normalized.instrumentNodeId
+    toneStates[group].jsonText = JSON.stringify(normalized.events, null, 2)
+    toneStates[group].error = ''
+  } catch (error) {
+    console.error('Failed to convert MML', error)
+    toneStates[group].error = 'MML parsing failed; using previous tone.'
+  }
+}
+
+function applyJsonToToneState(group: Group, jsonText: string) {
+  toneStates[group].jsonText = jsonText
+  try {
+    const parsed = JSON.parse(jsonText) as SequenceEvent[]
+    const normalized = normalizeToneEvents(parsed, group)
+    toneStates[group].events = normalized.events
+    toneStates[group].instrumentNodeId = normalized.instrumentNodeId
+    toneStates[group].jsonText = JSON.stringify(normalized.events, null, 2)
+    toneStates[group].error = ''
+  } catch (error) {
+    console.error('Failed to parse tone JSON', error)
+    toneStates[group].error = 'JSON parsing failed; using previous tone.'
+  }
+}
 
 const rowNoteNames: string[] = [...DEFAULT_NOTE_ROWS]
 const selectedRowsA = Array.from({ length: STEPS }, () => 1)
@@ -108,54 +347,38 @@ function getNoteNumbers(group: Group) {
 
 function buildSequenceFromNotes() {
   const { startTicks, loopTicks } = buildTimingMap()
+  const toneA = toneStates.A.events.length ? toneStates.A : buildFallbackToneConfig('A')
+  const toneB = toneStates.B.events.length ? toneStates.B : buildFallbackToneConfig('B')
+  const groupANodeId = toneA.instrumentNodeId
+  const groupBNodeId = toneB.instrumentNodeId
   const noteEvents: SequenceEvent[] = []
   for (let step = 0; step < STEPS; step++) {
     noteEvents.push(
       {
         eventType: 'triggerAttackRelease',
-        nodeId: GROUP_A_NODE_ID,
+        nodeId: groupANodeId,
         args: [midiToNoteName(noteNumbersA[step]), '16n', `+${startTicks[step]}i`],
       },
       {
         eventType: 'triggerAttackRelease',
-        nodeId: GROUP_B_NODE_ID,
+        nodeId: groupBNodeId,
         args: [midiToNoteName(noteNumbersB[step]), '16n', `+${startTicks[step]}i`],
       },
     )
   }
 
   const ndjsonEvents: SequenceEvent[] = [
-    {
-      eventType: 'createNode',
-      nodeId: GROUP_A_NODE_ID,
-      nodeType: 'Synth',
-      args: { oscillator: { type: 'triangle' } },
-    },
-    {
-      eventType: 'connect',
-      nodeId: GROUP_A_NODE_ID,
-      connectTo: MONITOR_NODE_ID,
-    },
-    {
-      eventType: 'createNode',
-      nodeId: GROUP_B_NODE_ID,
-      nodeType: 'Synth',
-      args: { oscillator: { type: 'triangle' } },
-    },
-    {
-      eventType: 'connect',
-      nodeId: GROUP_B_NODE_ID,
-      connectTo: MONITOR_NODE_ID,
-    },
+    ...toneA.events,
+    ...toneB.events,
     ...noteEvents,
     {
       eventType: 'loopEnd',
-      nodeId: GROUP_A_NODE_ID,
+      nodeId: groupANodeId,
       args: [`${loopTicks}i`],
     },
     {
       eventType: 'loopEnd',
-      nodeId: GROUP_B_NODE_ID,
+      nodeId: groupBNodeId,
       args: [`${loopTicks}i`],
     },
   ]
@@ -228,6 +451,151 @@ function updateRowCellLabels(rowIndex: number) {
   })
 }
 
+function setToneSectionOpen(group: Group, open: boolean) {
+  const controls = toneControls[group]
+  if (!controls) return
+  toneStates[group].open = open
+  controls.body.classList.toggle('collapsed', !open)
+  if (open) {
+    controls.body.removeAttribute('hidden')
+  } else {
+    controls.body.setAttribute('hidden', '')
+  }
+  controls.toggle.setAttribute('aria-expanded', open ? 'true' : 'false')
+}
+
+function updateToneStatus(group: Group) {
+  const controls = toneControls[group]
+  if (!controls) return
+  const hasError = Boolean(toneStates[group].error)
+  controls.status.textContent = hasError ? toneStates[group].error : 'Ready'
+  controls.status.className = `tone-status ${hasError ? 'tone-status-error' : 'tone-status-ok'}`
+}
+
+function updateToneControls(group: Group) {
+  const controls = toneControls[group]
+  if (!controls) return
+  controls.presetSelect.value = toneStates[group].presetId
+  controls.mmlTextarea.value = toneStates[group].mmlText
+  controls.jsonTextarea.value = toneStates[group].jsonText
+  setToneSectionOpen(group, toneStates[group].open)
+  updateToneStatus(group)
+}
+
+function toggleToneSection(group: Group) {
+  setToneSectionOpen(group, !toneStates[group].open)
+}
+
+async function handleTonePresetChange(group: Group, presetId: string) {
+  toneStates[group].presetId = presetId
+  const preset = getPresetById(presetId)
+  if (!preset) return
+  toneStates[group].mmlText = preset.mml
+  const controls = toneControls[group]
+  if (controls) {
+    controls.mmlTextarea.value = preset.mml
+  }
+  await handleToneMmlChange(group, preset.mml)
+}
+
+async function handleToneMmlChange(group: Group, mmlText: string) {
+  await applyMmlToToneState(group, mmlText)
+  updateToneControls(group)
+  void applySequenceChange()
+}
+
+function handleToneJsonChange(group: Group, jsonText: string) {
+  applyJsonToToneState(group, jsonText)
+  updateToneControls(group)
+  void applySequenceChange()
+}
+
+function renderToneControl(group: Group) {
+  if (!noteGrid) return
+  const section = document.createElement('div')
+  section.className = 'tone-section'
+
+  const header = document.createElement('div')
+  header.className = 'tone-section-header'
+
+  const toggle = document.createElement('button')
+  toggle.type = 'button'
+  toggle.className = 'tone-toggle'
+  toggle.textContent = `Group ${group} Tone`
+  toggle.setAttribute('aria-expanded', 'false')
+
+  const status = document.createElement('span')
+  status.className = 'tone-status tone-status-ok'
+  status.textContent = 'Ready'
+
+  header.appendChild(toggle)
+  header.appendChild(status)
+  section.appendChild(header)
+
+  const body = document.createElement('div')
+  body.className = 'tone-body collapsed'
+  body.setAttribute('hidden', '')
+
+  const presetLabel = document.createElement('label')
+  presetLabel.className = 'field'
+  const presetSpan = document.createElement('span')
+  presetSpan.className = 'label'
+  presetSpan.textContent = 'Tone preset (MML)'
+  const presetSelect = document.createElement('select')
+  presetSelect.className = 'text-input'
+  tonePresets.forEach((preset) => {
+    const option = document.createElement('option')
+    option.value = preset.id
+    option.textContent = preset.label
+    presetSelect.appendChild(option)
+  })
+  presetLabel.appendChild(presetSpan)
+  presetLabel.appendChild(presetSelect)
+  body.appendChild(presetLabel)
+
+  const mmlLabel = document.createElement('label')
+  mmlLabel.className = 'field'
+  const mmlSpan = document.createElement('span')
+  mmlSpan.className = 'label'
+  mmlSpan.textContent = 'MML edit'
+  const mmlTextarea = document.createElement('textarea')
+  mmlTextarea.className = 'text-input tone-textarea'
+  mmlTextarea.rows = 4
+  mmlLabel.appendChild(mmlSpan)
+  mmlLabel.appendChild(mmlTextarea)
+  body.appendChild(mmlLabel)
+
+  const jsonLabel = document.createElement('label')
+  jsonLabel.className = 'field'
+  const jsonSpan = document.createElement('span')
+  jsonSpan.className = 'label'
+  jsonSpan.textContent = 'JSON edit'
+  const jsonTextarea = document.createElement('textarea')
+  jsonTextarea.className = 'text-input tone-textarea'
+  jsonTextarea.rows = 4
+  jsonLabel.appendChild(jsonSpan)
+  jsonLabel.appendChild(jsonTextarea)
+  body.appendChild(jsonLabel)
+
+  section.appendChild(body)
+  noteGrid.appendChild(section)
+
+  toneControls[group] = { toggle, body, presetSelect, mmlTextarea, jsonTextarea, status }
+
+  toggle.addEventListener('click', () => toggleToneSection(group))
+  presetSelect.addEventListener('change', () => {
+    void handleTonePresetChange(group, presetSelect.value)
+  })
+  mmlTextarea.addEventListener('change', () => {
+    void handleToneMmlChange(group, mmlTextarea.value)
+  })
+  jsonTextarea.addEventListener('change', () => {
+    handleToneJsonChange(group, jsonTextarea.value)
+  })
+
+  updateToneControls(group)
+}
+
 function renderNoteGrid() {
   if (!noteGrid) return
   noteGrid.innerHTML = ''
@@ -249,6 +617,7 @@ function renderNoteGrid() {
 
   rowNoteNames.forEach((noteName, rowIndex) => {
     if (rowIndex === 0 || rowIndex === GROUP_SIZE) {
+      renderToneControl(rowIndex === 0 ? 'A' : 'B')
       const groupLabel = document.createElement('p')
       groupLabel.className = 'group-label'
       groupLabel.textContent = rowIndex === 0 ? 'Group A' : 'Group B'
@@ -379,6 +748,24 @@ updateLoopNote()
 updateNdjsonDisplay()
 
 bpmInput?.addEventListener('change', () => handleBpmInputChange(bpmInput.value))
+
+async function initializeTonePresets() {
+  const groups: Group[] = ['A', 'B']
+  for (const group of groups) {
+    const preset = getPresetById(toneStates[group].presetId)
+    if (preset) {
+      toneStates[group].mmlText = preset.mml
+    }
+    updateToneControls(group)
+    if (preset?.mml) {
+      await applyMmlToToneState(group, preset.mml)
+      updateToneControls(group)
+    }
+  }
+  void applySequenceChange()
+}
+
+void initializeTonePresets()
 
 const waveformAnalyser = new Tone.Analyser('waveform', 1024)
 const fftAnalyser = new Tone.Analyser('fft', 128)
