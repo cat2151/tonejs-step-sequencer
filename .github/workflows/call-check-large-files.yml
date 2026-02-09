@@ -12,4 +12,4 @@ permissions:
 
 jobs:
   call-check-large-files:
-    uses: cat2151/github-actions/.github/workflows/check-large-files.yml@main
+    uses: cat2151/github-actions/.github/workflows/check-large-files.yml@v1
