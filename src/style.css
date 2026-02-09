@@ -82,7 +82,7 @@ h1 {
 
 .visual-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
   gap: 1.25rem;
   align-items: start;
 }
@@ -215,8 +215,8 @@ h1 {
 
 .note-grid-row {
   display: grid;
-  grid-template-columns: 80px repeat(16, minmax(34px, 1fr));
-  gap: 0.35rem;
+  grid-template-columns: 64px repeat(16, minmax(24px, 1fr));
+  gap: 0.24rem;
   align-items: center;
 }
 
@@ -397,7 +397,7 @@ pre {
 }
 
 .visuals canvas {
-  width: 100%;
+  width: min(92%, 520px);
   border: 1px solid var(--border);
   border-radius: 10px;
   background: rgba(15, 22, 36, 0.85);

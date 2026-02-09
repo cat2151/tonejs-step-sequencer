@@ -19,6 +19,8 @@ const FFT_NORMALIZATION_OFFSET = 140
 const WAVEFORM_BUFFER_MIN = 16384
 const WAVEFORM_BUFFER_MAX = 65536
 const MIN_STANDARD_DEVIATION = 1e-6
+const MAX_WAVEFORM_GAIN = 64
+const WAVEFORM_SILENCE_THRESHOLD = 1e-4
 type Group = 'A' | 'B'
 
 type TonePreset = {
@@ -839,6 +841,10 @@ const waveformWindowState: Record<Group, { prevSegment: Float32Array | null; win
   A: { prevSegment: null, windowLength: 0, prevStart: 0 },
   B: { prevSegment: null, windowLength: 0, prevStart: 0 },
 }
+const waveformGainState: Record<Group, { gain: number; framesSincePeak: number }> = {
+  A: { gain: 1, framesSincePeak: 0 },
+  B: { gain: 1, framesSincePeak: 0 },
+}
 
 function setStatus(state: 'idle' | 'starting' | 'playing') {
   if (!statusDot || !toggleButton) return
@@ -1044,6 +1050,13 @@ function resetWaveformWindows() {
   waveformWindowState.B.prevStart = 0
 }
 
+function resetWaveformGains() {
+  waveformGainState.A.gain = 1
+  waveformGainState.B.gain = 1
+  waveformGainState.A.framesSincePeak = 0
+  waveformGainState.B.framesSincePeak = 0
+}
+
 function drawGroupVisuals(
   group: Group,
   waveformAnalyser: Tone.Analyser,
@@ -1061,6 +1074,43 @@ function drawGroupVisuals(
   const waveformSegment = selectWaveformSegment(group, waveformValues, windowLength)
   const waveformData = waveformSegment.length ? waveformSegment : waveformValues
   const fftValues = fftAnalyser.getValue() as Float32Array
+  const gainState = waveformGainState[group]
+  let maxAbs = 0
+  for (let i = 0; i < waveformData.length; i++) {
+    const abs = Math.abs(waveformData[i])
+    if (abs > maxAbs) {
+      maxAbs = abs
+      if (maxAbs >= 1) {
+        break
+      }
+    }
+  }
+  let gain = gainState.gain
+  let scaledMax = maxAbs * gain
+
+  if (scaledMax > 1) {
+    gain = 1 / Math.max(maxAbs, MIN_STANDARD_DEVIATION)
+    gainState.framesSincePeak = 0
+  } else if (scaledMax >= 0.98) {
+    gainState.framesSincePeak = 0
+  } else if (maxAbs < WAVEFORM_SILENCE_THRESHOLD) {
+    gainState.framesSincePeak = 0
+  } else {
+    gainState.framesSincePeak += 1
+    if (gainState.framesSincePeak >= 30) {
+      gain *= 1.01
+      scaledMax = maxAbs * gain
+      if (scaledMax > 1) {
+        gain = 1 / Math.max(maxAbs, MIN_STANDARD_DEVIATION)
+        gainState.framesSincePeak = 0
+      }
+    }
+  }
+  if (!Number.isFinite(gain) || gain <= 0) {
+    gain = 1
+  }
+  gainState.gain = Math.min(gain, MAX_WAVEFORM_GAIN)
+  const appliedGain = gainState.gain
   const waveformWidth = waveformSize.width || waveformCanvas.width
   const waveformHeight = waveformSize.height || waveformCanvas.height
   const fftWidth = fftSize.width || fftCanvas.width
@@ -1073,7 +1123,7 @@ function drawGroupVisuals(
   waveformCtx.beginPath()
   const waveformLength = Math.max(waveformData.length - 1, 1)
   for (let index = 0; index < waveformData.length; index++) {
-    const value = waveformData[index]
+    const value = Math.max(Math.min(waveformData[index] * appliedGain, 1), -1)
     const x = (index / waveformLength) * waveformWidth
     const y = ((1 - (value + 1) / 2) * waveformHeight)
     if (index === 0) {
@@ -1143,6 +1193,7 @@ function stopVisuals() {
     animationFrameId = null
   }
   resetWaveformWindows()
+  resetWaveformGains()
   clearVisuals()
 }
 
