@@ -1,0 +1,47 @@
+# 大きなファイル検出設定
+# Configuration for detecting large files
+
+[settings]
+# 行数の閾値（この値を超えた場合にissueを起票）
+max_lines = 500
+
+# issue作成時のラベル
+issue_labels = ["refactoring", "code-quality", "automated"]
+
+# issueのタイトルテンプレート
+issue_title = "大きなファイルの検出: {count}個のファイルが{max_lines}行を超えています"
+
+[scan]
+# スキャン対象のファイルパターン（glob形式）
+# すべてのファイルを対象とし、除外パターンでフィルタリング
+include_patterns = [
+    "**/*",
+]
+
+# 除外するディレクトリパターン
+exclude_patterns = [
+    # Workflow temporary directory (automatically excluded by the workflow)
+    # ".github/actions-tmp/**",
+
+    # ビルド成果物・依存関係
+    "**/node_modules/**",
+    "**/dist/**",
+    "dist/**",
+    "**/build/**",
+    "**/pkg/**",
+    "**/public/wasm/**",
+    "**/.git/**",
+    "**/target/**",
+
+    # ビルド成果物（拡張子で除外）
+    "**/*.d.ts",
+    "**/*.d.ts.map",
+    "**/*.js.map",
+    "**/*.mjs",
+    "**/*.wasm",
+]
+
+# 除外する特定のファイル（ファイルパスで指定）
+exclude_files = [
+    # 例: "src/legacy/LargeOldFile.ts",
+]
