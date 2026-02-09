@@ -4,8 +4,8 @@ import { NDJSONStreamingPlayer, SequencerNodes, type SequenceEvent } from 'tonej
 import { initWasm as initMmlWasm, mml2json } from 'tonejs-mml-to-json'
 
 const MONITOR_NODE_ID = 1
-const MONITOR_A_NODE_ID = 11
-const MONITOR_B_NODE_ID = 21
+const MONITOR_A_NODE_ID = 10011
+const MONITOR_B_NODE_ID = 10021
 const STEPS = 16
 const DEFAULT_MIDI_NOTE = 60
 const DEFAULT_BPM = 120
@@ -203,7 +203,9 @@ function normalizeToneEvents(events: SequenceEvent[], group: Group) {
           ? monitorNodeId
           : rawConnectTo === MONITOR_NODE_ID
             ? monitorNodeId
-            : mapId(rawConnectTo) ?? monitorNodeId
+            : rawConnectTo === monitorNodeId
+              ? monitorNodeId
+              : mapId(rawConnectTo) ?? monitorNodeId
 
       normalized.push({
         ...(event as SequenceEvent),
@@ -926,81 +928,79 @@ function clearVisuals() {
   }
 }
 
+function drawGroupVisuals(
+  waveformAnalyser: Tone.Analyser,
+  fftAnalyser: Tone.Analyser,
+  waveformCtx: CanvasRenderingContext2D,
+  waveformCanvas: HTMLCanvasElement,
+  waveformSize: { width: number; height: number },
+  fftCtx: CanvasRenderingContext2D,
+  fftCanvas: HTMLCanvasElement,
+  fftSize: { width: number; height: number }
+) {
+  const waveformValues = waveformAnalyser.getValue() as Float32Array
+  const fftValues = fftAnalyser.getValue() as Float32Array
+  const waveformWidth = waveformSize.width || waveformCanvas.width
+  const waveformHeight = waveformSize.height || waveformCanvas.height
+  const fftWidth = fftSize.width || fftCanvas.width
+  const fftHeight = fftSize.height || fftCanvas.height
+
+  waveformCtx.fillStyle = '#0b1221'
+  waveformCtx.fillRect(0, 0, waveformWidth, waveformHeight)
+  waveformCtx.strokeStyle = '#7cf2c2'
+  waveformCtx.lineWidth = 2
+  waveformCtx.beginPath()
+  waveformValues.forEach((value, index) => {
+    const x = (index / (waveformValues.length - 1)) * waveformWidth
+    const y = ((1 - (value + 1) / 2) * waveformHeight)
+    if (index === 0) {
+      waveformCtx.moveTo(x, y)
+    } else {
+      waveformCtx.lineTo(x, y)
+    }
+  })
+  waveformCtx.stroke()
+
+  fftCtx.fillStyle = '#0b1221'
+  fftCtx.fillRect(0, 0, fftWidth, fftHeight)
+  fftCtx.fillStyle = '#5dbbff'
+  const barWidth = fftWidth / fftValues.length
+  fftValues.forEach((value, index) => {
+    const magnitude = Math.max((value + FFT_NORMALIZATION_OFFSET) / FFT_NORMALIZATION_OFFSET, 0)
+    const barHeight = magnitude * fftHeight
+    const x = index * barWidth
+    const y = fftHeight - barHeight
+    fftCtx.fillRect(x, y, barWidth - 1, barHeight)
+  })
+}
+
 function drawVisuals() {
   if (!waveformCtxA || !fftCtxA || !waveformCanvasA || !fftCanvasA ||
       !waveformCtxB || !fftCtxB || !waveformCanvasB || !fftCanvasB) return
 
   // Draw Group A
-  const waveformValuesA = waveformAnalyserA.getValue() as Float32Array
-  const fftValuesA = fftAnalyserA.getValue() as Float32Array
-  const waveformWidthA = waveformSizeA.width || waveformCanvasA.width
-  const waveformHeightA = waveformSizeA.height || waveformCanvasA.height
-  const fftWidthA = fftSizeA.width || fftCanvasA.width
-  const fftHeightA = fftSizeA.height || fftCanvasA.height
-
-  waveformCtxA.fillStyle = '#0b1221'
-  waveformCtxA.fillRect(0, 0, waveformWidthA, waveformHeightA)
-  waveformCtxA.strokeStyle = '#7cf2c2'
-  waveformCtxA.lineWidth = 2
-  waveformCtxA.beginPath()
-  waveformValuesA.forEach((value, index) => {
-    const x = (index / (waveformValuesA.length - 1)) * waveformWidthA
-    const y = ((1 - (value + 1) / 2) * waveformHeightA)
-    if (index === 0) {
-      waveformCtxA.moveTo(x, y)
-    } else {
-      waveformCtxA.lineTo(x, y)
-    }
-  })
-  waveformCtxA.stroke()
-
-  fftCtxA.fillStyle = '#0b1221'
-  fftCtxA.fillRect(0, 0, fftWidthA, fftHeightA)
-  fftCtxA.fillStyle = '#5dbbff'
-  const barWidthA = fftWidthA / fftValuesA.length
-  fftValuesA.forEach((value, index) => {
-    const magnitude = Math.max((value + FFT_NORMALIZATION_OFFSET) / FFT_NORMALIZATION_OFFSET, 0)
-    const barHeight = magnitude * fftHeightA
-    const x = index * barWidthA
-    const y = fftHeightA - barHeight
-    fftCtxA.fillRect(x, y, barWidthA - 1, barHeight)
-  })
+  drawGroupVisuals(
+    waveformAnalyserA,
+    fftAnalyserA,
+    waveformCtxA,
+    waveformCanvasA,
+    waveformSizeA,
+    fftCtxA,
+    fftCanvasA,
+    fftSizeA
+  )
 
   // Draw Group B
-  const waveformValuesB = waveformAnalyserB.getValue() as Float32Array
-  const fftValuesB = fftAnalyserB.getValue() as Float32Array
-  const waveformWidthB = waveformSizeB.width || waveformCanvasB.width
-  const waveformHeightB = waveformSizeB.height || waveformCanvasB.height
-  const fftWidthB = fftSizeB.width || fftCanvasB.width
-  const fftHeightB = fftSizeB.height || fftCanvasB.height
-
-  waveformCtxB.fillStyle = '#0b1221'
-  waveformCtxB.fillRect(0, 0, waveformWidthB, waveformHeightB)
-  waveformCtxB.strokeStyle = '#7cf2c2'
-  waveformCtxB.lineWidth = 2
-  waveformCtxB.beginPath()
-  waveformValuesB.forEach((value, index) => {
-    const x = (index / (waveformValuesB.length - 1)) * waveformWidthB
-    const y = ((1 - (value + 1) / 2) * waveformHeightB)
-    if (index === 0) {
-      waveformCtxB.moveTo(x, y)
-    } else {
-      waveformCtxB.lineTo(x, y)
-    }
-  })
-  waveformCtxB.stroke()
-
-  fftCtxB.fillStyle = '#0b1221'
-  fftCtxB.fillRect(0, 0, fftWidthB, fftHeightB)
-  fftCtxB.fillStyle = '#5dbbff'
-  const barWidthB = fftWidthB / fftValuesB.length
-  fftValuesB.forEach((value, index) => {
-    const magnitude = Math.max((value + FFT_NORMALIZATION_OFFSET) / FFT_NORMALIZATION_OFFSET, 0)
-    const barHeight = magnitude * fftHeightB
-    const x = index * barWidthB
-    const y = fftHeightB - barHeight
-    fftCtxB.fillRect(x, y, barWidthB - 1, barHeight)
-  })
+  drawGroupVisuals(
+    waveformAnalyserB,
+    fftAnalyserB,
+    waveformCtxB,
+    waveformCanvasB,
+    waveformSizeB,
+    fftCtxB,
+    fftCanvasB,
+    fftSizeB
+  )
 
   animationFrameId = window.requestAnimationFrame(drawVisuals)
 }
