@@ -972,6 +972,7 @@ function findBestCorrelationStart(values: Float32Array, reference: Float32Array,
   const maxStart = values.length - windowLength
   if (maxStart <= 0) return 0
 
+  const SCORE_EPSILON = 1e-4
   let refSum = 0
   let refSqSum = 0
   for (let i = 0; i < windowLength; i++) {
@@ -983,12 +984,12 @@ function findBestCorrelationStart(values: Float32Array, reference: Float32Array,
   const refVariance = Math.max(refSqSum / windowLength - refMean * refMean, 0)
   const refStd = Math.max(Math.sqrt(refVariance), MIN_STANDARD_DEVIATION)
 
-  const searchRadius = Math.min(Math.max(64, Math.floor(windowLength / 16)), Math.max(maxStart, 0))
-  const startMin = Math.max(0, Math.min(centerStart, maxStart) - searchRadius)
-  const startMax = Math.min(maxStart, Math.max(centerStart, 0) + searchRadius)
+  const startMin = 0
+  const startMax = Math.max(maxStart, 0)
 
   let bestScore = -Infinity
   let bestStart = 0
+  let bestDistance = Infinity
 
   for (let start = startMin; start <= startMax; start++) {
     let windowSum = 0
@@ -1009,10 +1010,15 @@ function findBestCorrelationStart(values: Float32Array, reference: Float32Array,
     const numerator = dotProduct - windowLength * windowMean * refMean
     const denominator = windowLength * windowStd * refStd
     const score = denominator > 0 ? numerator / denominator : -Infinity
+    const distance = Math.abs(start - centerStart)
 
-    if (score > bestScore) {
+    if (score > bestScore + SCORE_EPSILON) {
       bestScore = score
       bestStart = start
+      bestDistance = distance
+    } else if (Math.abs(score - bestScore) <= SCORE_EPSILON && distance < bestDistance) {
+      bestStart = start
+      bestDistance = distance
     }
   }
 
