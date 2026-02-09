@@ -82,9 +82,13 @@ h1 {
 
 .visual-layout {
   display: grid;
-  grid-template-columns: 1.35fr 1fr;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
   gap: 1.25rem;
   align-items: start;
+}
+
+.visual-layout > * {
+  min-width: 0;
 }
 
 .note-controls {
