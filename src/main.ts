@@ -345,7 +345,7 @@ if (app) {
       </section>
       <section class="panel">
         <div class="details">
-          <p class="label">NDJSON payload</p>
+          <label class="label" for="ndjson">NDJSON payload</label>
           <textarea id="ndjson" class="text-input tone-textarea" rows="8" spellcheck="false"></textarea>
           <p class="note" id="loop-note">Loop runs at ${DEFAULT_BPM} BPM with a 16-step 16n sequence and explicit loop boundary.</p>
         </div>
@@ -813,7 +813,7 @@ updateLoopNote()
 updateNdjsonDisplay()
 
 bpmInput?.addEventListener('change', () => handleBpmInputChange(bpmInput.value))
-ndjsonElement?.addEventListener('change', () => handleNdjsonChange(ndjsonElement.value))
+ndjsonElement?.addEventListener('input', () => handleNdjsonChange(ndjsonElement.value))
 
 async function initializeTonePresets() {
   const groups: Group[] = ['A', 'B']
