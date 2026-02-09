@@ -19,6 +19,8 @@ const FFT_NORMALIZATION_OFFSET = 140
 const WAVEFORM_BUFFER_MIN = 16384
 const WAVEFORM_BUFFER_MAX = 65536
 const MIN_STANDARD_DEVIATION = 1e-6
+const MAX_WAVEFORM_GAIN = 64
+const WAVEFORM_SILENCE_THRESHOLD = 1e-4
 type Group = 'A' | 'B'
 
 type TonePreset = {
@@ -1078,6 +1080,9 @@ function drawGroupVisuals(
     const abs = Math.abs(waveformData[i])
     if (abs > maxAbs) {
       maxAbs = abs
+      if (maxAbs >= 1) {
+        break
+      }
     }
   }
   let gain = gainState.gain
@@ -1087,6 +1092,8 @@ function drawGroupVisuals(
     gain = 1 / Math.max(maxAbs, MIN_STANDARD_DEVIATION)
     gainState.framesSincePeak = 0
   } else if (scaledMax >= 0.98) {
+    gainState.framesSincePeak = 0
+  } else if (maxAbs < WAVEFORM_SILENCE_THRESHOLD) {
     gainState.framesSincePeak = 0
   } else {
     gainState.framesSincePeak += 1
@@ -1099,7 +1106,10 @@ function drawGroupVisuals(
       }
     }
   }
-  gainState.gain = gain
+  if (!Number.isFinite(gain) || gain <= 0) {
+    gain = 1
+  }
+  gainState.gain = Math.min(gain, MAX_WAVEFORM_GAIN)
   const appliedGain = gainState.gain
   const waveformWidth = waveformSize.width || waveformCanvas.width
   const waveformHeight = waveformSize.height || waveformCanvas.height
