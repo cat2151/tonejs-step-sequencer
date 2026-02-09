@@ -797,6 +797,8 @@ const fftCtxA = fftCanvasA?.getContext('2d')
 const waveformCtxB = waveformCanvasB?.getContext('2d')
 const fftCtxB = fftCanvasB?.getContext('2d')
 
+toggleButton?.focus()
+
 renderNoteGrid()
 buildSequenceFromNotes()
 updateLoopNote()
