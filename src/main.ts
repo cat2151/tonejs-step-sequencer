@@ -16,6 +16,9 @@ const GROUP_B_NODE_ID = 20
 const PPQ = Tone.Transport.PPQ ?? 192
 const SIXTEENTH_TICKS = PPQ / 4
 const FFT_NORMALIZATION_OFFSET = 140
+const WAVEFORM_BUFFER_MIN = 16384
+const WAVEFORM_BUFFER_MAX = 65536
+const MIN_STANDARD_DEVIATION = 1e-6
 type Group = 'A' | 'B'
 
 type TonePreset = {
@@ -311,7 +314,7 @@ if (app) {
         </div>
       </section>
       <section class="panel visuals">
-        <div class="visual-header">
+        <div class="visual-layout">
           <div class="note-controls">
             <div class="note-controls-header">
               <label class="field" for="bpm-input">
@@ -324,17 +327,17 @@ if (app) {
             </div>
             <div class="note-grid" id="note-grid"></div>
           </div>
-        </div>
-        <div class="visual-grid">
-          <div class="visual-group">
-            <p class="visual-label">Group A</p>
-            <canvas id="waveform-a" width="720" height="120" role="img" aria-label="Group A Waveform display"></canvas>
-            <canvas id="fft-a" width="720" height="120" role="img" aria-label="Group A FFT display"></canvas>
-          </div>
-          <div class="visual-group">
-            <p class="visual-label">Group B</p>
-            <canvas id="waveform-b" width="720" height="120" role="img" aria-label="Group B Waveform display"></canvas>
-            <canvas id="fft-b" width="720" height="120" role="img" aria-label="Group B FFT display"></canvas>
+          <div class="visual-grid">
+            <div class="visual-group">
+              <p class="visual-label">Group A</p>
+              <canvas id="waveform-a" width="720" height="120" role="img" aria-label="Group A Waveform display"></canvas>
+              <canvas id="fft-a" width="720" height="120" role="img" aria-label="Group A FFT display"></canvas>
+            </div>
+            <div class="visual-group">
+              <p class="visual-label">Group B</p>
+              <canvas id="waveform-b" width="720" height="120" role="img" aria-label="Group B Waveform display"></canvas>
+              <canvas id="fft-b" width="720" height="120" role="img" aria-label="Group B FFT display"></canvas>
+            </div>
           </div>
         </div>
       </section>
@@ -377,6 +380,18 @@ function getSelections(group: Group) {
 
 function getNoteNumbers(group: Group) {
   return group === 'A' ? noteNumbersA : noteNumbersB
+}
+
+function getGroupMinFrequency(group: Group) {
+  const notes = getNoteNumbers(group)
+  let minMidi = Infinity
+  notes.forEach((note) => {
+    if (Number.isFinite(note)) {
+      minMidi = Math.min(minMidi, note)
+    }
+  })
+  const midiValue = Number.isFinite(minMidi) ? minMidi : DEFAULT_MIDI_NOTE
+  return Tone.Frequency(midiValue, 'midi').toFrequency()
 }
 
 function buildSequenceFromNotes() {
@@ -805,9 +820,9 @@ async function initializeTonePresets() {
 
 void initializeTonePresets()
 
-const waveformAnalyserA = new Tone.Analyser('waveform', 1024)
+const waveformAnalyserA = new Tone.Analyser('waveform', WAVEFORM_BUFFER_MIN)
 const fftAnalyserA = new Tone.Analyser('fft', 128)
-const waveformAnalyserB = new Tone.Analyser('waveform', 1024)
+const waveformAnalyserB = new Tone.Analyser('waveform', WAVEFORM_BUFFER_MIN)
 const fftAnalyserB = new Tone.Analyser('fft', 128)
 
 let waveformSizeA: { width: number; height: number } = { width: 0, height: 0 }
@@ -820,6 +835,10 @@ let monitorBusB: Tone.Gain | null = null
 let animationFrameId: number | null = null
 let startingPromise: Promise<void> | null = null
 let sequenceUpdatePromise: Promise<void> | null = null
+const waveformWindowState: Record<Group, { prevSegment: Float32Array | null; windowLength: number; prevStart: number }> = {
+  A: { prevSegment: null, windowLength: 0, prevStart: 0 },
+  B: { prevSegment: null, windowLength: 0, prevStart: 0 },
+}
 
 function setStatus(state: 'idle' | 'starting' | 'playing') {
   if (!statusDot || !toggleButton) return
@@ -928,7 +947,105 @@ function clearVisuals() {
   }
 }
 
+function ensureWaveformBuffer(analyser: Tone.Analyser, windowLength: number) {
+  if (analyser.size >= windowLength) return
+  const nextPower = 2 ** Math.ceil(Math.log2(windowLength))
+  const newSize = Math.min(Math.max(nextPower, WAVEFORM_BUFFER_MIN), WAVEFORM_BUFFER_MAX)
+  analyser.size = newSize
+}
+
+function calculateWindowSamples(group: Group) {
+  const minFrequency = Math.max(getGroupMinFrequency(group), 1)
+  const sampleRate = Tone.getContext().sampleRate || 44100
+  return Math.max(Math.round((sampleRate / minFrequency) * 4), 1)
+}
+
+function findBestCorrelationStart(values: Float32Array, reference: Float32Array, windowLength: number, centerStart: number) {
+  const maxStart = values.length - windowLength
+  if (maxStart <= 0) return 0
+
+  let refSum = 0
+  let refSqSum = 0
+  for (let i = 0; i < windowLength; i++) {
+    const refSample = reference[i]
+    refSum += refSample
+    refSqSum += refSample * refSample
+  }
+  const refMean = refSum / windowLength
+  const refVariance = Math.max(refSqSum / windowLength - refMean * refMean, 0)
+  const refStd = Math.max(Math.sqrt(refVariance), MIN_STANDARD_DEVIATION)
+
+  const searchRadius = Math.min(Math.max(64, Math.floor(windowLength / 16)), Math.max(maxStart, 0))
+  const startMin = Math.max(0, Math.min(centerStart, maxStart) - searchRadius)
+  const startMax = Math.min(maxStart, Math.max(centerStart, 0) + searchRadius)
+
+  let bestScore = -Infinity
+  let bestStart = 0
+
+  for (let start = startMin; start <= startMax; start++) {
+    let windowSum = 0
+    let windowSqSum = 0
+    let dotProduct = 0
+    let idx = start
+    for (let i = 0; i < windowLength; i++, idx++) {
+      const sample = values[idx]
+      windowSum += sample
+      windowSqSum += sample * sample
+      dotProduct += sample * reference[i]
+    }
+
+    const windowMean = windowSum / windowLength
+    const windowVariance = Math.max(windowSqSum / windowLength - windowMean * windowMean, 0)
+    const windowStd = Math.max(Math.sqrt(windowVariance), MIN_STANDARD_DEVIATION)
+
+    const numerator = dotProduct - windowLength * windowMean * refMean
+    const denominator = windowLength * windowStd * refStd
+    const score = denominator > 0 ? numerator / denominator : -Infinity
+
+    if (score > bestScore) {
+      bestScore = score
+      bestStart = start
+    }
+  }
+
+  return bestStart
+}
+
+function selectWaveformSegment(group: Group, waveformValues: Float32Array, windowLength: number) {
+  const effectiveWindow = Math.min(windowLength, waveformValues.length)
+  const state = waveformWindowState[group]
+
+  if (state.windowLength !== effectiveWindow) {
+    state.windowLength = effectiveWindow
+    state.prevSegment = null
+    state.prevStart = 0
+  }
+
+  const maxStart = waveformValues.length - effectiveWindow
+  let startIndex = 0
+
+  if (state.prevSegment && state.prevSegment.length === effectiveWindow && maxStart > 0) {
+    const centerStart = Math.max(0, Math.min(state.prevStart, maxStart))
+    startIndex = findBestCorrelationStart(waveformValues, state.prevSegment, effectiveWindow, centerStart)
+  } else if (maxStart > 0) {
+    startIndex = Math.floor(maxStart / 2)
+  }
+
+  const segment = waveformValues.slice(startIndex, startIndex + effectiveWindow)
+  state.prevSegment = segment
+  state.prevStart = startIndex
+  return segment
+}
+
+function resetWaveformWindows() {
+  waveformWindowState.A.prevSegment = null
+  waveformWindowState.B.prevSegment = null
+  waveformWindowState.A.prevStart = 0
+  waveformWindowState.B.prevStart = 0
+}
+
 function drawGroupVisuals(
+  group: Group,
   waveformAnalyser: Tone.Analyser,
   fftAnalyser: Tone.Analyser,
   waveformCtx: CanvasRenderingContext2D,
@@ -938,7 +1055,11 @@ function drawGroupVisuals(
   fftCanvas: HTMLCanvasElement,
   fftSize: { width: number; height: number }
 ) {
+  const windowLength = calculateWindowSamples(group)
+  ensureWaveformBuffer(waveformAnalyser, windowLength)
   const waveformValues = waveformAnalyser.getValue() as Float32Array
+  const waveformSegment = selectWaveformSegment(group, waveformValues, windowLength)
+  const waveformData = waveformSegment.length ? waveformSegment : waveformValues
   const fftValues = fftAnalyser.getValue() as Float32Array
   const waveformWidth = waveformSize.width || waveformCanvas.width
   const waveformHeight = waveformSize.height || waveformCanvas.height
@@ -950,15 +1071,17 @@ function drawGroupVisuals(
   waveformCtx.strokeStyle = '#7cf2c2'
   waveformCtx.lineWidth = 2
   waveformCtx.beginPath()
-  waveformValues.forEach((value, index) => {
-    const x = (index / (waveformValues.length - 1)) * waveformWidth
+  const waveformLength = Math.max(waveformData.length - 1, 1)
+  for (let index = 0; index < waveformData.length; index++) {
+    const value = waveformData[index]
+    const x = (index / waveformLength) * waveformWidth
     const y = ((1 - (value + 1) / 2) * waveformHeight)
     if (index === 0) {
       waveformCtx.moveTo(x, y)
     } else {
       waveformCtx.lineTo(x, y)
     }
-  })
+  }
   waveformCtx.stroke()
 
   fftCtx.fillStyle = '#0b1221'
@@ -980,6 +1103,7 @@ function drawVisuals() {
 
   // Draw Group A
   drawGroupVisuals(
+    'A',
     waveformAnalyserA,
     fftAnalyserA,
     waveformCtxA,
@@ -992,6 +1116,7 @@ function drawVisuals() {
 
   // Draw Group B
   drawGroupVisuals(
+    'B',
     waveformAnalyserB,
     fftAnalyserB,
     waveformCtxB,
@@ -1017,6 +1142,7 @@ function stopVisuals() {
     window.cancelAnimationFrame(animationFrameId)
     animationFrameId = null
   }
+  resetWaveformWindows()
   clearVisuals()
 }
 

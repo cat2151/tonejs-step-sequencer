@@ -80,12 +80,15 @@ h1 {
   margin-top: 0.75rem;
 }
 
-.visual-header {
-  display: flex;
-  justify-content: space-between;
-  gap: 1rem;
-  align-items: flex-start;
-  flex-wrap: wrap;
+.visual-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  gap: 1.25rem;
+  align-items: start;
+}
+
+.visual-layout > * {
+  min-width: 0;
 }
 
 .note-controls {
@@ -435,5 +438,9 @@ pre {
 
   .status {
     font-size: 0.95rem;
+  }
+
+  .visual-layout {
+    grid-template-columns: 1fr;
   }
 }
