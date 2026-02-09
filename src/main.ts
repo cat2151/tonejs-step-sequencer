@@ -15,6 +15,7 @@ const GROUP_A_NODE_ID = 10
 const GROUP_B_NODE_ID = 20
 const PPQ = Tone.Transport.PPQ ?? 192
 const SIXTEENTH_TICKS = PPQ / 4
+const FFT_NORMALIZATION_OFFSET = 140
 type Group = 'A' | 'B'
 
 type TonePreset = {
@@ -958,7 +959,7 @@ function drawVisuals() {
   fftCtxA.fillStyle = '#5dbbff'
   const barWidthA = fftWidthA / fftValuesA.length
   fftValuesA.forEach((value, index) => {
-    const magnitude = Math.max((value + 140) / 140, 0)
+    const magnitude = Math.max((value + FFT_NORMALIZATION_OFFSET) / FFT_NORMALIZATION_OFFSET, 0)
     const barHeight = magnitude * fftHeightA
     const x = index * barWidthA
     const y = fftHeightA - barHeight
@@ -994,7 +995,7 @@ function drawVisuals() {
   fftCtxB.fillStyle = '#5dbbff'
   const barWidthB = fftWidthB / fftValuesB.length
   fftValuesB.forEach((value, index) => {
-    const magnitude = Math.max((value + 140) / 140, 0)
+    const magnitude = Math.max((value + FFT_NORMALIZATION_OFFSET) / FFT_NORMALIZATION_OFFSET, 0)
     const barHeight = magnitude * fftHeightB
     const x = index * barWidthB
     const y = fftHeightB - barHeight
