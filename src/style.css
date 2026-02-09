@@ -379,6 +379,20 @@ pre {
   gap: 0.75rem;
 }
 
+.visual-group {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.visual-label {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
 .visuals canvas {
   width: 100%;
   border: 1px solid var(--border);

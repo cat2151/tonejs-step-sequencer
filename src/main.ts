@@ -4,6 +4,8 @@ import { NDJSONStreamingPlayer, SequencerNodes, type SequenceEvent } from 'tonej
 import { initWasm as initMmlWasm, mml2json } from 'tonejs-mml-to-json'
 
 const MONITOR_NODE_ID = 1
+const MONITOR_A_NODE_ID = 11
+const MONITOR_B_NODE_ID = 21
 const STEPS = 16
 const DEFAULT_MIDI_NOTE = 60
 const DEFAULT_BPM = 120
@@ -137,6 +139,7 @@ function getPresetById(id: string) {
 
 function buildFallbackToneConfig(group: Group) {
   const nodeId = group === 'A' ? GROUP_A_NODE_ID : GROUP_B_NODE_ID
+  const monitorNodeId = group === 'A' ? MONITOR_A_NODE_ID : MONITOR_B_NODE_ID
   const events: SequenceEvent[] = [
     {
       eventType: 'createNode',
@@ -147,7 +150,7 @@ function buildFallbackToneConfig(group: Group) {
     {
       eventType: 'connect',
       nodeId,
-      connectTo: MONITOR_NODE_ID,
+      connectTo: monitorNodeId,
     },
   ]
   return { events, instrumentNodeId: nodeId }
@@ -172,6 +175,7 @@ async function ensureMmlReady() {
 
 function normalizeToneEvents(events: SequenceEvent[], group: Group) {
   const baseNodeId = group === 'A' ? GROUP_A_NODE_ID : GROUP_B_NODE_ID
+  const monitorNodeId = group === 'A' ? MONITOR_A_NODE_ID : MONITOR_B_NODE_ID
   let nextNodeId = baseNodeId
   const idMap = new Map<number, number>()
   const mapId = (id: unknown) => {
@@ -195,10 +199,10 @@ function normalizeToneEvents(events: SequenceEvent[], group: Group) {
       const rawConnectTo = (event as { connectTo?: unknown }).connectTo
       const connectTo =
         rawConnectTo === 'toDestination'
-          ? MONITOR_NODE_ID
+          ? monitorNodeId
           : rawConnectTo === MONITOR_NODE_ID
-            ? MONITOR_NODE_ID
-            : mapId(rawConnectTo) ?? MONITOR_NODE_ID
+            ? monitorNodeId
+            : mapId(rawConnectTo) ?? monitorNodeId
 
       normalized.push({
         ...(event as SequenceEvent),
@@ -319,8 +323,16 @@ if (app) {
           </div>
         </div>
         <div class="visual-grid">
-          <canvas id="waveform" width="720" height="160" role="img" aria-label="Waveform display"></canvas>
-          <canvas id="fft" width="720" height="160" role="img" aria-label="FFT display"></canvas>
+          <div class="visual-group">
+            <p class="visual-label">Group A</p>
+            <canvas id="waveform-a" width="720" height="120" role="img" aria-label="Group A Waveform display"></canvas>
+            <canvas id="fft-a" width="720" height="120" role="img" aria-label="Group A FFT display"></canvas>
+          </div>
+          <div class="visual-group">
+            <p class="visual-label">Group B</p>
+            <canvas id="waveform-b" width="720" height="120" role="img" aria-label="Group B Waveform display"></canvas>
+            <canvas id="fft-b" width="720" height="120" role="img" aria-label="Group B FFT display"></canvas>
+          </div>
         </div>
       </section>
       <section class="panel">
@@ -756,10 +768,14 @@ function handleBpmInputChange(value: string) {
 const toggleButton = document.querySelector<HTMLButtonElement>('#toggle')
 const statusLabel = document.querySelector<HTMLSpanElement>('#status-label')
 const statusDot = document.querySelector<HTMLSpanElement>('#dot')
-const waveformCanvas = document.querySelector<HTMLCanvasElement>('#waveform')
-const fftCanvas = document.querySelector<HTMLCanvasElement>('#fft')
-const waveformCtx = waveformCanvas?.getContext('2d')
-const fftCtx = fftCanvas?.getContext('2d')
+const waveformCanvasA = document.querySelector<HTMLCanvasElement>('#waveform-a')
+const fftCanvasA = document.querySelector<HTMLCanvasElement>('#fft-a')
+const waveformCanvasB = document.querySelector<HTMLCanvasElement>('#waveform-b')
+const fftCanvasB = document.querySelector<HTMLCanvasElement>('#fft-b')
+const waveformCtxA = waveformCanvasA?.getContext('2d')
+const fftCtxA = fftCanvasA?.getContext('2d')
+const waveformCtxB = waveformCanvasB?.getContext('2d')
+const fftCtxB = fftCanvasB?.getContext('2d')
 
 renderNoteGrid()
 buildSequenceFromNotes()
@@ -786,13 +802,18 @@ async function initializeTonePresets() {
 
 void initializeTonePresets()
 
-const waveformAnalyser = new Tone.Analyser('waveform', 1024)
-const fftAnalyser = new Tone.Analyser('fft', 128)
+const waveformAnalyserA = new Tone.Analyser('waveform', 1024)
+const fftAnalyserA = new Tone.Analyser('fft', 128)
+const waveformAnalyserB = new Tone.Analyser('waveform', 1024)
+const fftAnalyserB = new Tone.Analyser('fft', 128)
 
-let waveformSize: { width: number; height: number } = { width: 0, height: 0 }
-let fftSize: { width: number; height: number } = { width: 0, height: 0 }
+let waveformSizeA: { width: number; height: number } = { width: 0, height: 0 }
+let fftSizeA: { width: number; height: number } = { width: 0, height: 0 }
+let waveformSizeB: { width: number; height: number } = { width: 0, height: 0 }
+let fftSizeB: { width: number; height: number } = { width: 0, height: 0 }
 let resizeTimeoutId: number | null = null
-let monitorBus: Tone.Gain | null = null
+let monitorBusA: Tone.Gain | null = null
+let monitorBusB: Tone.Gain | null = null
 let animationFrameId: number | null = null
 let startingPromise: Promise<void> | null = null
 let sequenceUpdatePromise: Promise<void> | null = null
@@ -819,12 +840,20 @@ function setStatus(state: 'idle' | 'starting' | 'playing') {
 }
 
 function setupMonitorBus() {
-  monitorBus?.dispose()
-  monitorBus = new Tone.Gain()
-  monitorBus.connect(waveformAnalyser)
-  monitorBus.connect(fftAnalyser)
-  monitorBus.toDestination()
-  nodes.set(MONITOR_NODE_ID, monitorBus)
+  monitorBusA?.dispose()
+  monitorBusB?.dispose()
+  
+  monitorBusA = new Tone.Gain()
+  monitorBusA.connect(waveformAnalyserA)
+  monitorBusA.connect(fftAnalyserA)
+  monitorBusA.toDestination()
+  nodes.set(MONITOR_A_NODE_ID, monitorBusA)
+  
+  monitorBusB = new Tone.Gain()
+  monitorBusB.connect(waveformAnalyserB)
+  monitorBusB.connect(fftAnalyserB)
+  monitorBusB.toDestination()
+  nodes.set(MONITOR_B_NODE_ID, monitorBusB)
 }
 
 function resizeCanvasBuffer(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D) {
@@ -845,11 +874,17 @@ function resizeCanvasBuffer(canvas: HTMLCanvasElement, ctx: CanvasRenderingConte
 }
 
 function resizeCanvases() {
-  if (waveformCanvas && waveformCtx) {
-    waveformSize = resizeCanvasBuffer(waveformCanvas, waveformCtx)
+  if (waveformCanvasA && waveformCtxA) {
+    waveformSizeA = resizeCanvasBuffer(waveformCanvasA, waveformCtxA)
   }
-  if (fftCanvas && fftCtx) {
-    fftSize = resizeCanvasBuffer(fftCanvas, fftCtx)
+  if (fftCanvasA && fftCtxA) {
+    fftSizeA = resizeCanvasBuffer(fftCanvasA, fftCtxA)
+  }
+  if (waveformCanvasB && waveformCtxB) {
+    waveformSizeB = resizeCanvasBuffer(waveformCanvasB, waveformCtxB)
+  }
+  if (fftCanvasB && fftCtxB) {
+    fftSizeB = resizeCanvasBuffer(fftCanvasB, fftCtxB)
   }
 }
 
@@ -864,59 +899,106 @@ function scheduleResize() {
   }, 100)
 }
 
-if (waveformCanvas && fftCanvas && waveformCtx && fftCtx) {
+if (waveformCanvasA && fftCanvasA && waveformCtxA && fftCtxA &&
+    waveformCanvasB && fftCanvasB && waveformCtxB && fftCtxB) {
   resizeCanvases()
   clearVisuals()
   window.addEventListener('resize', scheduleResize)
 }
 
 function clearVisuals() {
-  if (waveformCtx && waveformCanvas) {
-    waveformCtx.fillStyle = '#0b1221'
-    waveformCtx.fillRect(0, 0, waveformSize.width || waveformCanvas.width, waveformSize.height || waveformCanvas.height)
+  if (waveformCtxA && waveformCanvasA) {
+    waveformCtxA.fillStyle = '#0b1221'
+    waveformCtxA.fillRect(0, 0, waveformSizeA.width || waveformCanvasA.width, waveformSizeA.height || waveformCanvasA.height)
   }
-  if (fftCtx && fftCanvas) {
-    fftCtx.fillStyle = '#0b1221'
-    fftCtx.fillRect(0, 0, fftSize.width || fftCanvas.width, fftSize.height || fftCanvas.height)
+  if (fftCtxA && fftCanvasA) {
+    fftCtxA.fillStyle = '#0b1221'
+    fftCtxA.fillRect(0, 0, fftSizeA.width || fftCanvasA.width, fftSizeA.height || fftCanvasA.height)
+  }
+  if (waveformCtxB && waveformCanvasB) {
+    waveformCtxB.fillStyle = '#0b1221'
+    waveformCtxB.fillRect(0, 0, waveformSizeB.width || waveformCanvasB.width, waveformSizeB.height || waveformCanvasB.height)
+  }
+  if (fftCtxB && fftCanvasB) {
+    fftCtxB.fillStyle = '#0b1221'
+    fftCtxB.fillRect(0, 0, fftSizeB.width || fftCanvasB.width, fftSizeB.height || fftCanvasB.height)
   }
 }
 
 function drawVisuals() {
-  if (!waveformCtx || !fftCtx || !waveformCanvas || !fftCanvas) return
+  if (!waveformCtxA || !fftCtxA || !waveformCanvasA || !fftCanvasA ||
+      !waveformCtxB || !fftCtxB || !waveformCanvasB || !fftCanvasB) return
 
-  const waveformValues = waveformAnalyser.getValue() as Float32Array
-  const fftValues = fftAnalyser.getValue() as Float32Array
-  const waveformWidth = waveformSize.width || waveformCanvas.width
-  const waveformHeight = waveformSize.height || waveformCanvas.height
-  const fftWidth = fftSize.width || fftCanvas.width
-  const fftHeight = fftSize.height || fftCanvas.height
+  // Draw Group A
+  const waveformValuesA = waveformAnalyserA.getValue() as Float32Array
+  const fftValuesA = fftAnalyserA.getValue() as Float32Array
+  const waveformWidthA = waveformSizeA.width || waveformCanvasA.width
+  const waveformHeightA = waveformSizeA.height || waveformCanvasA.height
+  const fftWidthA = fftSizeA.width || fftCanvasA.width
+  const fftHeightA = fftSizeA.height || fftCanvasA.height
 
-  waveformCtx.fillStyle = '#0b1221'
-  waveformCtx.fillRect(0, 0, waveformWidth, waveformHeight)
-  waveformCtx.strokeStyle = '#7cf2c2'
-  waveformCtx.lineWidth = 2
-  waveformCtx.beginPath()
-  waveformValues.forEach((value, index) => {
-    const x = (index / (waveformValues.length - 1)) * waveformWidth
-    const y = ((1 - (value + 1) / 2) * waveformHeight)
+  waveformCtxA.fillStyle = '#0b1221'
+  waveformCtxA.fillRect(0, 0, waveformWidthA, waveformHeightA)
+  waveformCtxA.strokeStyle = '#7cf2c2'
+  waveformCtxA.lineWidth = 2
+  waveformCtxA.beginPath()
+  waveformValuesA.forEach((value, index) => {
+    const x = (index / (waveformValuesA.length - 1)) * waveformWidthA
+    const y = ((1 - (value + 1) / 2) * waveformHeightA)
     if (index === 0) {
-      waveformCtx.moveTo(x, y)
+      waveformCtxA.moveTo(x, y)
     } else {
-      waveformCtx.lineTo(x, y)
+      waveformCtxA.lineTo(x, y)
     }
   })
-  waveformCtx.stroke()
+  waveformCtxA.stroke()
 
-  fftCtx.fillStyle = '#0b1221'
-  fftCtx.fillRect(0, 0, fftWidth, fftHeight)
-  fftCtx.fillStyle = '#5dbbff'
-  const barWidth = fftWidth / fftValues.length
-  fftValues.forEach((value, index) => {
+  fftCtxA.fillStyle = '#0b1221'
+  fftCtxA.fillRect(0, 0, fftWidthA, fftHeightA)
+  fftCtxA.fillStyle = '#5dbbff'
+  const barWidthA = fftWidthA / fftValuesA.length
+  fftValuesA.forEach((value, index) => {
     const magnitude = Math.max((value + 140) / 140, 0)
-    const barHeight = magnitude * fftHeight
-    const x = index * barWidth
-    const y = fftHeight - barHeight
-    fftCtx.fillRect(x, y, barWidth - 1, barHeight)
+    const barHeight = magnitude * fftHeightA
+    const x = index * barWidthA
+    const y = fftHeightA - barHeight
+    fftCtxA.fillRect(x, y, barWidthA - 1, barHeight)
+  })
+
+  // Draw Group B
+  const waveformValuesB = waveformAnalyserB.getValue() as Float32Array
+  const fftValuesB = fftAnalyserB.getValue() as Float32Array
+  const waveformWidthB = waveformSizeB.width || waveformCanvasB.width
+  const waveformHeightB = waveformSizeB.height || waveformCanvasB.height
+  const fftWidthB = fftSizeB.width || fftCanvasB.width
+  const fftHeightB = fftSizeB.height || fftCanvasB.height
+
+  waveformCtxB.fillStyle = '#0b1221'
+  waveformCtxB.fillRect(0, 0, waveformWidthB, waveformHeightB)
+  waveformCtxB.strokeStyle = '#7cf2c2'
+  waveformCtxB.lineWidth = 2
+  waveformCtxB.beginPath()
+  waveformValuesB.forEach((value, index) => {
+    const x = (index / (waveformValuesB.length - 1)) * waveformWidthB
+    const y = ((1 - (value + 1) / 2) * waveformHeightB)
+    if (index === 0) {
+      waveformCtxB.moveTo(x, y)
+    } else {
+      waveformCtxB.lineTo(x, y)
+    }
+  })
+  waveformCtxB.stroke()
+
+  fftCtxB.fillStyle = '#0b1221'
+  fftCtxB.fillRect(0, 0, fftWidthB, fftHeightB)
+  fftCtxB.fillStyle = '#5dbbff'
+  const barWidthB = fftWidthB / fftValuesB.length
+  fftValuesB.forEach((value, index) => {
+    const magnitude = Math.max((value + 140) / 140, 0)
+    const barHeight = magnitude * fftHeightB
+    const x = index * barWidthB
+    const y = fftHeightB - barHeight
+    fftCtxB.fillRect(x, y, barWidthB - 1, barHeight)
   })
 
   animationFrameId = window.requestAnimationFrame(drawVisuals)
@@ -946,7 +1028,8 @@ async function startLoop() {
     await Tone.start()
     Tone.Transport.stop()
     nodes.disposeAll()
-    monitorBus = null
+    monitorBusA = null
+    monitorBusB = null
     setupMonitorBus()
 
     await player.start(ndjsonSequence)
