@@ -139,9 +139,16 @@ export function createVisuals(nodes: SequencerNodes) {
     return Math.max(Math.round((sampleRate / minFrequency) * 4), 1)
   }
 
-  function findBestCorrelationStart(values: Float32Array, reference: Float32Array, windowLength: number, centerStart: number) {
-    const maxStart = values.length - windowLength
-    if (maxStart <= 0) return 0
+  function findBestCorrelationStart(
+    values: Float32Array,
+    reference: Float32Array,
+    windowLength: number,
+    centerStart: number,
+    startMax: number,
+    maxIterations: number,
+  ) {
+    const clampedStartMax = Math.min(startMax, values.length - windowLength)
+    if (clampedStartMax <= 0) return 0
 
     const SCORE_EPSILON = 1e-4
     let refSum = 0
@@ -155,15 +162,28 @@ export function createVisuals(nodes: SequencerNodes) {
     const refVariance = Math.max(refSqSum / windowLength - refMean * refMean, 0)
     const refStd = Math.max(Math.sqrt(refVariance), MIN_STANDARD_DEVIATION)
 
-    const searchRadius = Math.min(4096, Math.max(Math.floor(windowLength / 4), 512))
-    const startMin = Math.max(0, Math.min(centerStart - searchRadius, maxStart))
-    const startMax = Math.max(startMin, Math.min(centerStart + searchRadius, maxStart))
+    const startMin = 0
+    const totalCandidates = clampedStartMax - startMin + 1
+    const iterationBudget = Math.max(1, Math.min(maxIterations, totalCandidates))
+    const candidates: number[] = []
+    if (iterationBudget === 1) {
+      candidates.push(Math.max(startMin, Math.min(centerStart, clampedStartMax)))
+    } else {
+      const span = clampedStartMax - startMin
+      for (let i = 0; i < iterationBudget; i++) {
+        const ratio = i / (iterationBudget - 1)
+        const start = Math.round(startMin + span * ratio)
+        if (candidates.length === 0 || candidates[candidates.length - 1] !== start) {
+          candidates.push(start)
+        }
+      }
+    }
 
     let bestScore = -Infinity
     let bestStart = 0
     let bestDistance = Infinity
 
-    for (let start = startMin; start <= startMax; start++) {
+    for (const start of candidates) {
       let windowSum = 0
       let windowSqSum = 0
       let dotProduct = 0
@@ -197,7 +217,7 @@ export function createVisuals(nodes: SequencerNodes) {
     return bestStart
   }
 
-  function selectWaveformSegment(group: Group, waveformValues: Float32Array, windowLength: number) {
+  function selectWaveformSegment(group: Group, waveformValues: Float32Array, windowLength: number, maxIterations: number) {
     const effectiveWindow = Math.min(windowLength, waveformValues.length)
     const state = waveformWindowState[group]
 
@@ -207,14 +227,16 @@ export function createVisuals(nodes: SequencerNodes) {
       state.prevStart = 0
     }
 
-    const maxStart = waveformValues.length - effectiveWindow
+    const maxStart = Math.max(0, waveformValues.length - effectiveWindow)
+    const cycleLength = Math.max(Math.floor(effectiveWindow / 4), 1)
+    const startMax = Math.min(maxStart, cycleLength * 4)
     let startIndex = 0
 
-    if (state.prevSegment && state.prevSegment.length === effectiveWindow && maxStart > 0) {
-      const centerStart = Math.max(0, Math.min(state.prevStart, maxStart))
-      startIndex = findBestCorrelationStart(waveformValues, state.prevSegment, effectiveWindow, centerStart)
-    } else if (maxStart > 0) {
-      startIndex = Math.floor(maxStart / 2)
+    if (state.prevSegment && state.prevSegment.length === effectiveWindow && startMax > 0) {
+      const centerStart = Math.max(0, Math.min(state.prevStart, startMax))
+      startIndex = findBestCorrelationStart(waveformValues, state.prevSegment, effectiveWindow, centerStart, startMax, maxIterations)
+    } else if (startMax > 0) {
+      startIndex = Math.floor(startMax / 2)
     }
 
     const segment = waveformValues.slice(startIndex, startIndex + effectiveWindow)
@@ -251,7 +273,9 @@ export function createVisuals(nodes: SequencerNodes) {
     const windowLength = calculateWindowSamples(group)
     ensureWaveformBuffer(waveformAnalyser, windowLength)
     const waveformValues = waveformAnalyser.getValue() as Float32Array
-    const waveformSegment = selectWaveformSegment(group, waveformValues, windowLength)
+    const waveformWidth = waveformSize.width || waveformCanvas.width
+    const searchIterations = Math.max(1, Math.min(waveformWidth > 0 ? Math.round(waveformWidth) : 400, 400))
+    const waveformSegment = selectWaveformSegment(group, waveformValues, windowLength, searchIterations)
     const waveformData = waveformSegment.length ? waveformSegment : waveformValues
     const fftValues = fftAnalyser.getValue() as Float32Array
     const gainState = waveformGainState[group]
@@ -291,7 +315,6 @@ export function createVisuals(nodes: SequencerNodes) {
     }
     gainState.gain = Math.min(gain, MAX_WAVEFORM_GAIN)
     const appliedGain = gainState.gain
-    const waveformWidth = waveformSize.width || waveformCanvas.width
     const waveformHeight = waveformSize.height || waveformCanvas.height
     const fftWidth = fftSize.width || fftCanvas.width
     const fftHeight = fftSize.height || fftCanvas.height
