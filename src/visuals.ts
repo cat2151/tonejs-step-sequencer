@@ -137,7 +137,26 @@ export function createVisuals(nodes: SequencerNodes) {
   function updateTimingDisplay(target: HTMLElement | null, durationMs: number) {
     if (!target) return
     const safeDuration = Number.isFinite(durationMs) && durationMs >= 0 ? durationMs : 0
-    target.textContent = `Render time: ${safeDuration.toFixed(1)} ms`
+    const text = `JS draw time: ${safeDuration.toFixed(1)} ms`
+    if (target.textContent !== text) {
+      target.textContent = text
+    }
+  }
+
+  function resetTimingDisplays() {
+    const placeholder = 'JS draw time: -- ms'
+    if (waveformTimeA && waveformTimeA.textContent !== placeholder) {
+      waveformTimeA.textContent = placeholder
+    }
+    if (fftTimeA && fftTimeA.textContent !== placeholder) {
+      fftTimeA.textContent = placeholder
+    }
+    if (waveformTimeB && waveformTimeB.textContent !== placeholder) {
+      waveformTimeB.textContent = placeholder
+    }
+    if (fftTimeB && fftTimeB.textContent !== placeholder) {
+      fftTimeB.textContent = placeholder
+    }
   }
 
   function ensureWaveformBuffer(analyser: Tone.Analyser) {
@@ -444,6 +463,7 @@ export function createVisuals(nodes: SequencerNodes) {
 
   function startVisuals() {
     resizeCanvases()
+    resetTimingDisplays()
     if (animationFrameId === null) {
       drawVisuals()
     }
@@ -457,6 +477,7 @@ export function createVisuals(nodes: SequencerNodes) {
     resetWaveformWindows()
     resetWaveformGains()
     clearVisuals()
+    resetTimingDisplays()
   }
 
   if (waveformCanvasA && fftCanvasA && waveformCtxA && fftCtxA && waveformCanvasB && fftCanvasB && waveformCtxB && fftCtxB) {
