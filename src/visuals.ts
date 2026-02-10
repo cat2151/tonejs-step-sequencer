@@ -165,13 +165,25 @@ export function createVisuals(nodes: SequencerNodes) {
     const startMin = 0
     const totalCandidates = clampedStartMax - startMin + 1
     const iterationBudget = Math.max(1, Math.min(maxIterations, totalCandidates))
-    const step = Math.max(1, Math.ceil(totalCandidates / iterationBudget))
+    const candidates: number[] = []
+    if (iterationBudget === 1) {
+      candidates.push(Math.max(startMin, Math.min(centerStart, clampedStartMax)))
+    } else {
+      const span = clampedStartMax - startMin
+      for (let i = 0; i < iterationBudget; i++) {
+        const ratio = i / (iterationBudget - 1)
+        const start = Math.round(startMin + span * ratio)
+        if (candidates.length === 0 || candidates[candidates.length - 1] !== start) {
+          candidates.push(start)
+        }
+      }
+    }
 
     let bestScore = -Infinity
     let bestStart = 0
     let bestDistance = Infinity
 
-    for (let start = startMin; start <= clampedStartMax; start += step) {
+    for (const start of candidates) {
       let windowSum = 0
       let windowSqSum = 0
       let dotProduct = 0
@@ -199,36 +211,6 @@ export function createVisuals(nodes: SequencerNodes) {
       } else if (Math.abs(score - bestScore) <= SCORE_EPSILON && distance < bestDistance) {
         bestStart = start
         bestDistance = distance
-      }
-    }
-
-    if ((clampedStartMax - startMin) % step !== 0) {
-      const start = clampedStartMax
-      let windowSum = 0
-      let windowSqSum = 0
-      let dotProduct = 0
-      let idx = start
-      for (let i = 0; i < windowLength; i++, idx++) {
-        const sample = values[idx]
-        windowSum += sample
-        windowSqSum += sample * sample
-        dotProduct += sample * reference[i]
-      }
-
-      const windowMean = windowSum / windowLength
-      const windowVariance = Math.max(windowSqSum / windowLength - windowMean * windowMean, 0)
-      const windowStd = Math.max(Math.sqrt(windowVariance), MIN_STANDARD_DEVIATION)
-
-      const numerator = dotProduct - windowLength * windowMean * refMean
-      const denominator = windowLength * windowStd * refStd
-      const score = denominator > 0 ? numerator / denominator : -Infinity
-      const distance = Math.abs(start - centerStart)
-
-      if (score > bestScore + SCORE_EPSILON) {
-        bestScore = score
-        bestStart = start
-      } else if (Math.abs(score - bestScore) <= SCORE_EPSILON && distance < bestDistance) {
-        bestStart = start
       }
     }
 
@@ -246,7 +228,7 @@ export function createVisuals(nodes: SequencerNodes) {
     }
 
     const maxStart = Math.max(0, waveformValues.length - effectiveWindow)
-    const cycleLength = Math.max(Math.round(effectiveWindow / 4), 1)
+    const cycleLength = Math.max(Math.floor(effectiveWindow / 4), 1)
     const startMax = Math.min(maxStart, cycleLength * 4)
     let startIndex = 0
 
