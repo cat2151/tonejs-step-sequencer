@@ -159,9 +159,16 @@ export function createVisuals(nodes: SequencerNodes) {
     }
   }
 
-  function ensureWaveformBuffer(analyser: Tone.Analyser) {
-    if (analyser.size !== WAVEFORM_BUFFER_MIN) {
-      analyser.size = WAVEFORM_BUFFER_MIN
+  function calculateWaveformBufferSize(windowLength: number) {
+    const desired = Math.min(WAVEFORM_BUFFER_MAX, Math.max(WAVEFORM_BUFFER_MIN, windowLength * 2))
+    return 2 ** Math.ceil(Math.log2(desired))
+  }
+
+  function ensureWaveformBuffer(analyser: Tone.Analyser, windowLength: number) {
+    const MAX_ANALYSER_SIZE = 32768
+    const targetSize = Math.min(calculateWaveformBufferSize(windowLength), MAX_ANALYSER_SIZE)
+    if (analyser.size !== targetSize) {
+      analyser.size = targetSize
     }
   }
 
@@ -336,7 +343,7 @@ export function createVisuals(nodes: SequencerNodes) {
   ): { waveformMs: number; fftMs: number } {
     const waveformStart = performance.now()
     const windowLength = calculateWindowSamples(group)
-    ensureWaveformBuffer(waveformAnalyser)
+    ensureWaveformBuffer(waveformAnalyser, windowLength)
     const latestFrame = waveformAnalyser.getValue() as Float32Array
     writeRingBuffer(group, latestFrame)
     const waveformValues =
