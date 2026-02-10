@@ -24,6 +24,10 @@ export function createVisuals(nodes: SequencerNodes) {
   const fftCtxA = fftCanvasA?.getContext('2d')
   const waveformCtxB = waveformCanvasB?.getContext('2d')
   const fftCtxB = fftCanvasB?.getContext('2d')
+  const waveformTimeA = document.querySelector<HTMLElement>('#waveform-a-time')
+  const fftTimeA = document.querySelector<HTMLElement>('#fft-a-time')
+  const waveformTimeB = document.querySelector<HTMLElement>('#waveform-b-time')
+  const fftTimeB = document.querySelector<HTMLElement>('#fft-b-time')
 
   const waveformAnalyserA = new Tone.Analyser('waveform', WAVEFORM_BUFFER_MIN)
   const fftAnalyserA = new Tone.Analyser('fft', 128)
@@ -128,6 +132,12 @@ export function createVisuals(nodes: SequencerNodes) {
       fftCtxB.fillStyle = '#0b1221'
       fftCtxB.fillRect(0, 0, fftSizeB.width || fftCanvasB.width, fftSizeB.height || fftCanvasB.height)
     }
+  }
+
+  function updateTimingDisplay(target: HTMLElement | null, durationMs: number) {
+    if (!target) return
+    const safeDuration = Number.isFinite(durationMs) && durationMs >= 0 ? durationMs : 0
+    target.textContent = `Render time: ${safeDuration.toFixed(1)} ms`
   }
 
   function ensureWaveformBuffer(analyser: Tone.Analyser) {
@@ -304,7 +314,8 @@ export function createVisuals(nodes: SequencerNodes) {
     fftCtx: CanvasRenderingContext2D,
     fftCanvas: HTMLCanvasElement,
     fftSize: CanvasSize,
-  ) {
+  ): { waveformMs: number; fftMs: number } {
+    const waveformStart = performance.now()
     const windowLength = calculateWindowSamples(group)
     ensureWaveformBuffer(waveformAnalyser)
     const latestFrame = waveformAnalyser.getValue() as Float32Array
@@ -315,7 +326,6 @@ export function createVisuals(nodes: SequencerNodes) {
     const searchIterations = Math.max(1, Math.min(waveformWidth > 0 ? Math.round(waveformWidth) : 400, 400))
     const waveformSegment = selectWaveformSegment(group, waveformValues, windowLength, searchIterations)
     const waveformData = waveformSegment.length ? waveformSegment : waveformValues
-    const fftValues = fftAnalyser.getValue() as Float32Array
     const gainState = waveformGainState[group]
     let maxAbs = 0
     for (let i = 0; i < waveformData.length; i++) {
@@ -354,8 +364,6 @@ export function createVisuals(nodes: SequencerNodes) {
     gainState.gain = Math.min(gain, MAX_WAVEFORM_GAIN)
     const appliedGain = gainState.gain
     const waveformHeight = waveformSize.height || waveformCanvas.height
-    const fftWidth = fftSize.width || fftCanvas.width
-    const fftHeight = fftSize.height || fftCanvas.height
 
     waveformCtx.fillStyle = '#0b1221'
     waveformCtx.fillRect(0, 0, waveformWidth, waveformHeight)
@@ -375,6 +383,13 @@ export function createVisuals(nodes: SequencerNodes) {
     }
     waveformCtx.stroke()
 
+    const waveformMs = performance.now() - waveformStart
+
+    const fftStart = performance.now()
+    const fftWidth = fftSize.width || fftCanvas.width
+    const fftHeight = fftSize.height || fftCanvas.height
+    const fftValues = fftAnalyser.getValue() as Float32Array
+
     fftCtx.fillStyle = '#0b1221'
     fftCtx.fillRect(0, 0, fftWidth, fftHeight)
     fftCtx.fillStyle = '#5dbbff'
@@ -386,12 +401,16 @@ export function createVisuals(nodes: SequencerNodes) {
       const y = fftHeight - barHeight
       fftCtx.fillRect(x, y, barWidth - 1, barHeight)
     })
+
+    const fftMs = performance.now() - fftStart
+
+    return { waveformMs, fftMs }
   }
 
   function drawVisuals() {
     if (!waveformCtxA || !fftCtxA || !waveformCanvasA || !fftCanvasA || !waveformCtxB || !fftCtxB || !waveformCanvasB || !fftCanvasB) return
 
-    drawGroupVisuals(
+    const timingsA = drawGroupVisuals(
       'A',
       waveformAnalyserA,
       fftAnalyserA,
@@ -403,7 +422,7 @@ export function createVisuals(nodes: SequencerNodes) {
       fftSizeA,
     )
 
-    drawGroupVisuals(
+    const timingsB = drawGroupVisuals(
       'B',
       waveformAnalyserB,
       fftAnalyserB,
@@ -414,6 +433,11 @@ export function createVisuals(nodes: SequencerNodes) {
       fftCanvasB,
       fftSizeB,
     )
+
+    updateTimingDisplay(waveformTimeA, timingsA.waveformMs)
+    updateTimingDisplay(fftTimeA, timingsA.fftMs)
+    updateTimingDisplay(waveformTimeB, timingsB.waveformMs)
+    updateTimingDisplay(fftTimeB, timingsB.fftMs)
 
     animationFrameId = window.requestAnimationFrame(drawVisuals)
   }

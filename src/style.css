@@ -403,6 +403,13 @@ pre {
   background: rgba(15, 22, 36, 0.85);
 }
 
+.visual-timing {
+  margin: -0.2rem 0 0.35rem;
+  color: var(--muted);
+  font-size: 0.82rem;
+  letter-spacing: 0.02em;
+}
+
 .repo-link {
   position: fixed;
   left: 14px;
