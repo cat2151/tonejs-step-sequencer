@@ -165,7 +165,8 @@ export function createVisuals(nodes: SequencerNodes) {
   }
 
   function ensureWaveformBuffer(analyser: Tone.Analyser, windowLength: number) {
-    const targetSize = calculateWaveformBufferSize(windowLength)
+    const MAX_ANALYSER_SIZE = 32768
+    const targetSize = Math.min(calculateWaveformBufferSize(windowLength), MAX_ANALYSER_SIZE)
     if (analyser.size !== targetSize) {
       analyser.size = targetSize
     }
