@@ -345,8 +345,8 @@ if (app) {
       </section>
       <section class="panel">
         <div class="details">
-          <p class="label">NDJSON payload</p>
-          <pre id="ndjson"></pre>
+          <label class="label" for="ndjson">NDJSON payload</label>
+          <textarea id="ndjson" class="text-input tone-textarea" rows="8" spellcheck="false"></textarea>
           <p class="note" id="loop-note">Loop runs at ${DEFAULT_BPM} BPM with a 16-step 16n sequence and explicit loop boundary.</p>
         </div>
       </section>
@@ -438,7 +438,7 @@ function buildSequenceFromNotes() {
 }
 
 const noteGrid = document.querySelector<HTMLDivElement>('#note-grid')
-const ndjsonElement = document.querySelector<HTMLPreElement>('#ndjson')
+const ndjsonElement = document.querySelector<HTMLTextAreaElement>('#ndjson')
 const loopNoteElement = document.querySelector<HTMLParagraphElement>('#loop-note')
 const bpmInput = document.querySelector<HTMLInputElement>('#bpm-input')
 const rowInputs: HTMLInputElement[] = []
@@ -480,7 +480,7 @@ function updateLoopNote() {
 
 function updateNdjsonDisplay() {
   if (ndjsonElement) {
-    ndjsonElement.textContent = ndjsonSequence
+    ndjsonElement.value = ndjsonSequence
   }
 }
 
@@ -722,7 +722,10 @@ function updateNoteNumbersForRow(rowIndex: number, midiValue: number) {
 async function applySequenceChange() {
   buildSequenceFromNotes()
   updateNdjsonDisplay()
+  await queueSequenceUpdate()
+}
 
+async function queueSequenceUpdate() {
   const startup = startingPromise
   if (!player.playing && !startup) return
 
@@ -785,6 +788,11 @@ function handleBpmInputChange(value: string) {
   void applySequenceChange()
 }
 
+function handleNdjsonChange(value: string) {
+  ndjsonSequence = value
+  void queueSequenceUpdate()
+}
+
 const toggleButton = document.querySelector<HTMLButtonElement>('#toggle')
 const statusLabel = document.querySelector<HTMLSpanElement>('#status-label')
 const statusDot = document.querySelector<HTMLSpanElement>('#dot')
@@ -805,6 +813,7 @@ updateLoopNote()
 updateNdjsonDisplay()
 
 bpmInput?.addEventListener('change', () => handleBpmInputChange(bpmInput.value))
+ndjsonElement?.addEventListener('input', () => handleNdjsonChange(ndjsonElement.value))
 
 async function initializeTonePresets() {
   const groups: Group[] = ['A', 'B']
