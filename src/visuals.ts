@@ -127,10 +127,11 @@ export function createVisuals(nodes: SequencerNodes) {
   }
 
   function ensureWaveformBuffer(analyser: Tone.Analyser, windowLength: number) {
-    if (analyser.size >= windowLength) return
     const nextPower = 2 ** Math.ceil(Math.log2(windowLength))
-    const newSize = Math.min(Math.max(nextPower, WAVEFORM_BUFFER_MIN), WAVEFORM_BUFFER_MAX)
-    analyser.size = newSize
+    const targetSize = Math.min(Math.max(nextPower, WAVEFORM_BUFFER_MIN), WAVEFORM_BUFFER_MAX)
+    if (analyser.size !== targetSize) {
+      analyser.size = targetSize
+    }
   }
 
   function calculateWindowSamples(group: Group) {
