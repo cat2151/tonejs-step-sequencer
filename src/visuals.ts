@@ -155,8 +155,9 @@ export function createVisuals(nodes: SequencerNodes) {
     const refVariance = Math.max(refSqSum / windowLength - refMean * refMean, 0)
     const refStd = Math.max(Math.sqrt(refVariance), MIN_STANDARD_DEVIATION)
 
-    const startMin = 0
-    const startMax = Math.max(maxStart, 0)
+    const searchRadius = Math.min(4096, Math.max(Math.floor(windowLength / 4), 512))
+    const startMin = Math.max(0, Math.min(centerStart - searchRadius, maxStart))
+    const startMax = Math.max(startMin, Math.min(centerStart + searchRadius, maxStart))
 
     let bestScore = -Infinity
     let bestStart = 0

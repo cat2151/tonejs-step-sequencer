@@ -28,6 +28,7 @@ let noteGrid: HTMLDivElement | null = null
 let ndjsonElement: HTMLTextAreaElement | null = null
 let loopNoteElement: HTMLParagraphElement | null = null
 let bpmInput: HTMLInputElement | null = null
+let ndjsonInputTimeout: number | null = null
 const rowInputs: HTMLInputElement[] = []
 const gridCells: HTMLButtonElement[][] = []
 
@@ -226,6 +227,16 @@ function handleNdjsonChange(value: string, onNdjsonChange: NdjsonChangeHandler) 
   void onNdjsonChange()
 }
 
+function scheduleNdjsonChange(text: string, onNdjsonChange: NdjsonChangeHandler) {
+  if (ndjsonInputTimeout !== null) {
+    window.clearTimeout(ndjsonInputTimeout)
+  }
+  ndjsonInputTimeout = window.setTimeout(() => {
+    ndjsonInputTimeout = null
+    handleNdjsonChange(text, onNdjsonChange)
+  }, 350)
+}
+
 function renderNoteGrid(onSequenceChange: SequenceChangeHandler) {
   if (!noteGrid) return
   const grid = noteGrid
@@ -306,6 +317,7 @@ export function initializeNoteGrid(onSequenceChange: SequenceChangeHandler, onNd
 
   if (ndjsonElement) {
     const textarea = ndjsonElement
-    textarea.addEventListener('input', () => handleNdjsonChange(textarea.value, onNdjsonChange))
+    textarea.addEventListener('input', () => scheduleNdjsonChange(textarea.value, onNdjsonChange))
+    textarea.addEventListener('change', () => handleNdjsonChange(textarea.value, onNdjsonChange))
   }
 }
