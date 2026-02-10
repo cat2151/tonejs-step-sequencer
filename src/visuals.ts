@@ -46,6 +46,10 @@ export function createVisuals(nodes: SequencerNodes) {
     A: { gain: 1, framesSincePeak: 0 },
     B: { gain: 1, framesSincePeak: 0 },
   }
+  const waveformRingState: Record<Group, { buffer: Float32Array; writeIndex: number; filled: number }> = {
+    A: { buffer: new Float32Array(WAVEFORM_BUFFER_MAX), writeIndex: 0, filled: 0 },
+    B: { buffer: new Float32Array(WAVEFORM_BUFFER_MAX), writeIndex: 0, filled: 0 },
+  }
 
   function setupMonitorBus() {
     monitorBusA?.dispose()
@@ -126,12 +130,42 @@ export function createVisuals(nodes: SequencerNodes) {
     }
   }
 
-  function ensureWaveformBuffer(analyser: Tone.Analyser, windowLength: number) {
-    const nextPower = 2 ** Math.ceil(Math.log2(windowLength))
-    const targetSize = Math.min(Math.max(nextPower, WAVEFORM_BUFFER_MIN), WAVEFORM_BUFFER_MAX)
-    if (analyser.size !== targetSize) {
-      analyser.size = targetSize
+  function ensureWaveformBuffer(analyser: Tone.Analyser) {
+    if (analyser.size !== WAVEFORM_BUFFER_MIN) {
+      analyser.size = WAVEFORM_BUFFER_MIN
     }
+  }
+
+  function writeRingBuffer(group: Group, frame: Float32Array) {
+    const state = waveformRingState[group]
+    const { buffer } = state
+    let writeIndex = state.writeIndex
+    for (let i = 0; i < frame.length; i++) {
+      buffer[writeIndex] = frame[i]
+      writeIndex += 1
+      if (writeIndex >= buffer.length) {
+        writeIndex = 0
+      }
+    }
+    state.writeIndex = writeIndex
+    state.filled = Math.min(buffer.length, state.filled + frame.length)
+  }
+
+  function readRingBuffer(group: Group, length: number) {
+    const state = waveformRingState[group]
+    const { buffer } = state
+    const available = Math.min(length, state.filled, buffer.length)
+    if (available <= 0) {
+      return new Float32Array(0)
+    }
+    const result = new Float32Array(available)
+    const start = (state.writeIndex - available + buffer.length) % buffer.length
+    const firstChunk = Math.min(available, buffer.length - start)
+    result.set(buffer.subarray(start, start + firstChunk), 0)
+    if (firstChunk < available) {
+      result.set(buffer.subarray(0, available - firstChunk), firstChunk)
+    }
+    return result
   }
 
   function calculateWindowSamples(group: Group) {
@@ -272,8 +306,11 @@ export function createVisuals(nodes: SequencerNodes) {
     fftSize: CanvasSize,
   ) {
     const windowLength = calculateWindowSamples(group)
-    ensureWaveformBuffer(waveformAnalyser, windowLength)
-    const waveformValues = waveformAnalyser.getValue() as Float32Array
+    ensureWaveformBuffer(waveformAnalyser)
+    const latestFrame = waveformAnalyser.getValue() as Float32Array
+    writeRingBuffer(group, latestFrame)
+    const waveformValues =
+      windowLength <= latestFrame.length ? latestFrame : readRingBuffer(group, Math.min(windowLength, WAVEFORM_BUFFER_MAX))
     const waveformWidth = waveformSize.width || waveformCanvas.width
     const searchIterations = Math.max(1, Math.min(waveformWidth > 0 ? Math.round(waveformWidth) : 400, 400))
     const waveformSegment = selectWaveformSegment(group, waveformValues, windowLength, searchIterations)
