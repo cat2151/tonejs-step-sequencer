@@ -1,6 +1,6 @@
 import './style.css'
 import * as Tone from 'tone'
-import { NDJSONStreamingPlayer, SequencerNodes } from 'tonejs-json-sequencer'
+import { NDJSONStreamingPlayer, SequencerNodes, parseNDJSON, type SequenceEvent } from 'tonejs-json-sequencer'
 import { DEFAULT_BPM, PPQ } from './constants'
 import { buildSequenceFromNotes, getNdjsonSequence, initializeNoteGrid, updateLoopNote, updateNdjsonDisplay } from './noteGrid'
 import { initializeTonePresets } from './toneControls'
@@ -81,6 +81,32 @@ let sequenceUpdatePromise: Promise<void> | null = null
 
 const visuals = createVisuals(nodes)
 
+function applyToneUpdates(ndjson: string) {
+  let events: SequenceEvent[] = []
+  try {
+    events = parseNDJSON(ndjson)
+  } catch (error) {
+    console.warn('Failed to parse NDJSON for tone update', error)
+    return
+  }
+
+  events.forEach((event) => {
+    if (event.eventType !== 'createNode') return
+    const node = nodes.get(event.nodeId)
+    if (!node) return
+    const args = (event as { args?: unknown }).args
+    const options = Array.isArray(args) ? args[0] : args
+    if (!options || typeof options !== 'object') return
+    if (typeof (node as { set?: unknown }).set === 'function') {
+      try {
+        ;(node as { set: (value: unknown) => void }).set(options)
+      } catch (error) {
+        console.warn('Failed to apply tone update', error)
+      }
+    }
+  })
+}
+
 function setStatus(state: 'idle' | 'starting' | 'playing') {
   if (!statusDot || !toggleButton) return
 
@@ -120,7 +146,9 @@ async function queueSequenceUpdate() {
       await startup
     }
     if (!player.playing) return
-    await player.start(getNdjsonSequence())
+    const ndjson = getNdjsonSequence()
+    applyToneUpdates(ndjson)
+    await player.start(ndjson)
   })
 
   sequenceUpdatePromise = thisUpdate
