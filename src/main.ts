@@ -140,13 +140,13 @@ function stopLoop() {
 async function queueSequenceUpdate() {
   const startup = startingPromise
   if (!player.playing && !startup) return
-  const ndjson = getNdjsonSequence()
 
   const thisUpdate = (sequenceUpdatePromise ?? Promise.resolve()).then(async () => {
     if (startup) {
       await startup
     }
     if (!player.playing) return
+    const ndjson = getNdjsonSequence()
     applyToneUpdates(ndjson)
     await player.start(ndjson)
   })
