@@ -488,22 +488,3 @@ pre {
   opacity: 0.95;
   transform: translateY(-1px);
 }
-
-@media (max-width: 720px) {
-  .shell {
-    padding: 1.5rem;
-  }
-
-  .controls {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .status {
-    font-size: 0.95rem;
-  }
-
-  .visual-layout {
-    grid-template-columns: 1fr;
-  }
-}
