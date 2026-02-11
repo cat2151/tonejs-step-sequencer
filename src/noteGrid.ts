@@ -29,6 +29,7 @@ let ndjsonElement: HTMLTextAreaElement | null = null
 let loopNoteElement: HTMLParagraphElement | null = null
 let bpmInput: HTMLInputElement | null = null
 let ndjsonInputTimeout: number | null = null
+const rowNoteInputTimeouts: Array<number | null> = []
 const rowInputs: HTMLInputElement[] = []
 const gridCells: HTMLButtonElement[][] = []
 
@@ -237,6 +238,20 @@ function scheduleNdjsonChange(text: string, onNdjsonChange: NdjsonChangeHandler)
   }, 350)
 }
 
+function scheduleRowNoteInputChange(
+  rowIndex: number,
+  value: string,
+  onSequenceChange: SequenceChangeHandler,
+) {
+  if (rowNoteInputTimeouts[rowIndex] !== null) {
+    window.clearTimeout(rowNoteInputTimeouts[rowIndex]!)
+  }
+  rowNoteInputTimeouts[rowIndex] = window.setTimeout(() => {
+    rowNoteInputTimeouts[rowIndex] = null
+    handleRowNoteInputChange(rowIndex, value, onSequenceChange)
+  }, 300)
+}
+
 function renderNoteGrid(onSequenceChange: SequenceChangeHandler) {
   if (!noteGrid) return
   const grid = noteGrid
@@ -276,7 +291,17 @@ function renderNoteGrid(onSequenceChange: SequenceChangeHandler) {
     input.className = 'text-input'
     input.value = noteName
     input.setAttribute('aria-label', `Row ${rowIndex + 1} note`)
-    input.addEventListener('change', () => handleRowNoteInputChange(rowIndex, input.value, onSequenceChange))
+    rowNoteInputTimeouts[rowIndex] = null
+    input.addEventListener('input', () =>
+      scheduleRowNoteInputChange(rowIndex, input.value, onSequenceChange),
+    )
+    input.addEventListener('change', () => {
+      if (rowNoteInputTimeouts[rowIndex] !== null) {
+        window.clearTimeout(rowNoteInputTimeouts[rowIndex]!)
+        rowNoteInputTimeouts[rowIndex] = null
+      }
+      handleRowNoteInputChange(rowIndex, input.value, onSequenceChange)
+    })
     labelWrapper.appendChild(input)
     rowInputs[rowIndex] = input
     rowElement.appendChild(labelWrapper)
