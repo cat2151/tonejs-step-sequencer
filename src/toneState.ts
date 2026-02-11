@@ -42,14 +42,7 @@ export const tonePresets: TonePreset[] = [
     "partialCount": 0,
     "partials": [],
     "phase": 0,
-    "type": "sine",
-    "harmonicity": 1,
-    "modulationIndex": 2,
-    "modulationType": "square",
-    "count": 3,
-    "spread": 20,
-    "width": 0.2,
-    "modulationFrequency": 0.4
+    "type": "sine"
   },
   "envelope": {
     "attack": 0.02,
@@ -64,14 +57,7 @@ export const tonePresets: TonePreset[] = [
     "partialCount": 0,
     "partials": [],
     "phase": 0,
-    "type": "square",
-    "harmonicity": 1,
-    "modulationIndex": 2,
-    "modulationType": "square",
-    "count": 3,
-    "spread": 20,
-    "width": 0.2,
-    "modulationFrequency": 0.4
+    "type": "square"
   },
   "modulationEnvelope": {
     "attack": 0.5,
@@ -134,14 +120,7 @@ o4 l8 cdefgab<c`,
     "partialCount": 0,
     "partials": [],
     "phase": 0,
-    "type": "sawtooth",
-    "harmonicity": 1,
-    "modulationIndex": 2,
-    "modulationType": "square",
-    "count": 3,
-    "spread": 20,
-    "width": 0.2,
-    "modulationFrequency": 0.4
+    "type": "sawtooth"
   }
 }
 @Chebyshev{
@@ -162,14 +141,7 @@ o3 l8 c c d d# f f g g`,
     "partialCount": 0,
     "partials": [],
     "phase": 0,
-    "type": "sawtooth",
-    "harmonicity": 1,
-    "modulationIndex": 2,
-    "modulationType": "square",
-    "count": 3,
-    "spread": 20,
-    "width": 0.2,
-    "modulationFrequency": 0.4
+    "type": "sawtooth"
   },
   "envelope": {
     "attack": 0.08,
