@@ -34,18 +34,47 @@ export const tonePresets: TonePreset[] = [
     id: 'fm-pingpong',
     label: 'FMSynth + PingPongDelay',
     mml: `@FMSynth{
+  "volume": 0,
+  "detune": 0,
+  "portamento": 0,
   "harmonicity": 3,
-  "modulationIndex": 10,
+  "oscillator": {
+    "partialCount": 0,
+    "partials": [],
+    "phase": 0,
+    "type": "sine"
+  },
   "envelope": {
     "attack": 0.02,
+    "attackCurve": "linear",
     "decay": 0.15,
+    "decayCurve": "exponential",
     "sustain": 0.6,
-    "release": 0.8
-  }
+    "release": 0.8,
+    "releaseCurve": "exponential"
+  },
+  "modulation": {
+    "partialCount": 0,
+    "partials": [],
+    "phase": 0,
+    "type": "square"
+  },
+  "modulationEnvelope": {
+    "attack": 0.5,
+    "attackCurve": "linear",
+    "decay": 0,
+    "decayCurve": "exponential",
+    "release": 0.5,
+    "releaseCurve": "exponential",
+    "sustain": 1
+  },
+  "modulationIndex": 10
 }
 @PingPongDelay{
+  "wet": 1,
+  "feedback": 0.35,
   "delayTime": "8n",
-  "feedback": 0.35
+  "maxDelay": 1
 }
 o4 l8 cdefgab<c`,
   },
@@ -53,19 +82,49 @@ o4 l8 cdefgab<c`,
     id: 'mono-chebyshev',
     label: 'MonoSynth + Chebyshev',
     mml: `@MonoSynth{
+  "volume": 0,
+  "detune": 0,
+  "portamento": 0,
   "filter": {
     "Q": 2,
+    "detune": 0,
+    "frequency": 350,
+    "gain": 0,
     "type": "lowpass",
     "rolloff": -12
   },
   "envelope": {
     "attack": 0.05,
+    "attackCurve": "linear",
     "decay": 0.3,
+    "decayCurve": "exponential",
     "sustain": 0.2,
-    "release": 1.2
+    "release": 1.2,
+    "releaseCurve": "exponential"
+  },
+  "filterEnvelope": {
+    "attack": 0.6,
+    "attackCurve": "linear",
+    "decay": 0.2,
+    "decayCurve": "exponential",
+    "release": 2,
+    "releaseCurve": "exponential",
+    "sustain": 0.5,
+    "baseFrequency": 200,
+    "exponent": 2,
+    "octaves": 3
+  },
+  "oscillator": {
+    "detune": 0,
+    "frequency": 440,
+    "partialCount": 0,
+    "partials": [],
+    "phase": 0,
+    "type": "sawtooth"
   }
 }
 @Chebyshev{
+  "wet": 1,
   "order": 32,
   "oversample": "2x"
 }
@@ -75,20 +134,33 @@ o3 l8 c c d d# f f g g`,
     id: 'synth-chorus',
     label: 'Synth + Chorus',
     mml: `@Synth{
+  "volume": 0,
+  "detune": 0,
+  "portamento": 0,
   "oscillator": {
+    "partialCount": 0,
+    "partials": [],
+    "phase": 0,
     "type": "sawtooth"
   },
   "envelope": {
     "attack": 0.08,
+    "attackCurve": "linear",
     "decay": 0.2,
+    "decayCurve": "exponential",
     "sustain": 0.4,
-    "release": 0.9
+    "release": 0.9,
+    "releaseCurve": "exponential"
   }
 }
 @Chorus{
+  "wet": 0.5,
+  "feedback": 0,
   "frequency": 4,
   "delayTime": 2.5,
-  "depth": 0.6
+  "depth": 0.6,
+  "type": "sine",
+  "spread": 180
 }
 o4 l8 c e g c e g<c`,
   },
