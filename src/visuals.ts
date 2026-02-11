@@ -210,8 +210,8 @@ export function createVisuals(nodes: SequencerNodes) {
     return result
   }
 
-  function calculateWindowSamples(group: Group) {
-    return Math.max(calculateCycleSamples(group) * 4, 1)
+  function calculateWindowSamples(cycleLength: number) {
+    return Math.max(cycleLength * 4, 1)
   }
 
   function findBestCorrelationStart(
@@ -360,15 +360,31 @@ export function createVisuals(nodes: SequencerNodes) {
   ): { waveformMs: number; fftMs: number } {
     const waveformStart = performance.now()
     const cycleLength = calculateCycleSamples(group)
-    const targetWindowLength = calculateWindowSamples(group)
+    const targetWindowLength = calculateWindowSamples(cycleLength)
     ensureWaveformBuffer(waveformAnalyser, targetWindowLength)
     const latestFrame = waveformAnalyser.getValue() as Float32Array
     writeRingBuffer(group, latestFrame)
     const desiredBufferLength = Math.min(WAVEFORM_BUFFER_MAX, targetWindowLength + cycleLength)
-    const waveformValues = readRingBuffer(group, desiredBufferLength)
+    let waveformValues: Float32Array
+    if (desiredBufferLength <= latestFrame.length) {
+      const offset = latestFrame.length - desiredBufferLength
+      waveformValues = offset > 0 ? latestFrame.subarray(offset) : latestFrame
+    } else {
+      waveformValues = readRingBuffer(group, desiredBufferLength)
+    }
     const availableCycles = waveformValues.length / Math.max(cycleLength, 1)
     const displayCycles =
-      availableCycles >= 4 ? 4 : availableCycles >= 3 ? 3 : availableCycles >= 2 ? 2 : availableCycles >= 1 ? 1 : 0.5
+      availableCycles >= 4
+        ? 4
+        : availableCycles >= 3
+          ? 3
+          : availableCycles >= 2
+            ? 2
+            : availableCycles >= 1
+              ? 1
+              : availableCycles >= 0.5
+                ? 0.5
+                : availableCycles
     const windowLength = Math.min(waveformValues.length, Math.max(Math.round(displayCycles * cycleLength), 1))
     const waveformWidth = waveformSize.width || waveformCanvas.width
     const searchIterations = Math.max(1, Math.min(waveformWidth > 0 ? Math.round(waveformWidth) : 400, 400))
