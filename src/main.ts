@@ -64,19 +64,30 @@ if (app) {
       <section class="panel">
         <div class="details">
           <div class="ndjson-header">
-            <label class="label" for="ndjson">NDJSON payload</label>
-            <div class="ndjson-error" id="ndjson-error" hidden>
-              <span class="dot dot-error" aria-hidden="true"></span>
-              <span class="ndjson-error-label" id="ndjson-error-label">Error</span>
+            <label class="label" for="ndjson" id="ndjson-label">NDJSON payload</label>
+            <div class="ndjson-actions">
               <button
                 type="button"
-                class="ndjson-error-button"
-                id="ndjson-error-toggle"
+                class="ndjson-toggle"
+                id="ndjson-toggle"
                 aria-expanded="false"
-                aria-controls="ndjson-error-details"
+                aria-controls="ndjson-container"
               >
-                Show error
+                Show NDJSON
               </button>
+              <div class="ndjson-error" id="ndjson-error" hidden>
+                <span class="dot dot-error" aria-hidden="true"></span>
+                <span class="ndjson-error-label" id="ndjson-error-label">Error</span>
+                <button
+                  type="button"
+                  class="ndjson-error-button"
+                  id="ndjson-error-toggle"
+                  aria-expanded="false"
+                  aria-controls="ndjson-error-details"
+                >
+                  Show error
+                </button>
+              </div>
             </div>
           </div>
           <div
@@ -88,8 +99,10 @@ if (app) {
           >
             <pre id="ndjson-error-text"></pre>
           </div>
-          <textarea id="ndjson" class="text-input tone-textarea" rows="8" spellcheck="false"></textarea>
-          <p class="note" id="loop-note">Loop runs at ${DEFAULT_BPM} BPM with a 16-step 16n sequence and explicit loop boundary.</p>
+          <div class="ndjson-container" id="ndjson-container" hidden>
+            <textarea id="ndjson" class="text-input tone-textarea" rows="8" spellcheck="false"></textarea>
+            <p class="note" id="loop-note">Loop runs at ${DEFAULT_BPM} BPM with a 16-step 16n sequence and explicit loop boundary.</p>
+          </div>
         </div>
       </section>
     </main>
@@ -107,7 +120,10 @@ const ndjsonErrorLabel = document.querySelector<HTMLSpanElement>('#ndjson-error-
 const ndjsonErrorToggle = document.querySelector<HTMLButtonElement>('#ndjson-error-toggle')
 const ndjsonErrorDetails = document.querySelector<HTMLDivElement>('#ndjson-error-details')
 const ndjsonErrorText = document.querySelector<HTMLPreElement>('#ndjson-error-text')
+const ndjsonToggle = document.querySelector<HTMLButtonElement>('#ndjson-toggle')
+const ndjsonContainer = document.querySelector<HTMLDivElement>('#ndjson-container')
 const ndjsonTextarea = document.querySelector<HTMLTextAreaElement>('#ndjson')
+const ndjsonLabel = document.querySelector<HTMLLabelElement>('#ndjson-label')
 
 toggleButton?.focus()
 
@@ -170,6 +186,24 @@ function toggleNdjsonErrorDetails(force?: boolean) {
 }
 
 ndjsonErrorToggle?.addEventListener('click', () => toggleNdjsonErrorDetails())
+
+function toggleNdjsonVisibility(force?: boolean) {
+  if (!ndjsonToggle || !ndjsonContainer) return
+  const nextOpen = force ?? ndjsonToggle.getAttribute('aria-expanded') !== 'true'
+  ndjsonToggle.setAttribute('aria-expanded', nextOpen ? 'true' : 'false')
+  ndjsonToggle.textContent = nextOpen ? 'Hide NDJSON' : 'Show NDJSON'
+  if (nextOpen) {
+    ndjsonContainer.removeAttribute('hidden')
+  } else {
+    ndjsonContainer.setAttribute('hidden', '')
+  }
+}
+
+ndjsonToggle?.addEventListener('click', () => toggleNdjsonVisibility())
+ndjsonLabel?.addEventListener('click', () => {
+  toggleNdjsonVisibility(true)
+  ndjsonTextarea?.focus()
+})
 
 function previewNdjsonValidation(ndjson: string) {
   try {
