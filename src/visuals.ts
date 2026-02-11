@@ -159,6 +159,12 @@ export function createVisuals(nodes: SequencerNodes) {
     }
   }
 
+  function calculateCycleSamples(group: Group) {
+    const minFrequency = Math.max(getGroupMinFrequency(group), 1)
+    const sampleRate = Tone.getContext().sampleRate || 44100
+    return Math.max(Math.round(sampleRate / minFrequency), 1)
+  }
+
   function calculateWaveformBufferSize(windowLength: number) {
     const desired = Math.min(WAVEFORM_BUFFER_MAX, Math.max(WAVEFORM_BUFFER_MIN, windowLength * 2))
     return 2 ** Math.ceil(Math.log2(desired))
@@ -205,9 +211,7 @@ export function createVisuals(nodes: SequencerNodes) {
   }
 
   function calculateWindowSamples(group: Group) {
-    const minFrequency = Math.max(getGroupMinFrequency(group), 1)
-    const sampleRate = Tone.getContext().sampleRate || 44100
-    return Math.max(Math.round((sampleRate / minFrequency) * 4), 1)
+    return Math.max(calculateCycleSamples(group) * 4, 1)
   }
 
   function findBestCorrelationStart(
@@ -217,6 +221,7 @@ export function createVisuals(nodes: SequencerNodes) {
     centerStart: number,
     startMax: number,
     maxIterations: number,
+    startMin = 0,
   ) {
     const clampedStartMax = Math.min(startMax, values.length - windowLength)
     if (clampedStartMax <= 0) return 0
@@ -233,7 +238,6 @@ export function createVisuals(nodes: SequencerNodes) {
     const refVariance = Math.max(refSqSum / windowLength - refMean * refMean, 0)
     const refStd = Math.max(Math.sqrt(refVariance), MIN_STANDARD_DEVIATION)
 
-    const startMin = 0
     const totalCandidates = clampedStartMax - startMin + 1
     const iterationBudget = Math.max(1, Math.min(maxIterations, totalCandidates))
     const candidates: number[] = []
@@ -288,7 +292,13 @@ export function createVisuals(nodes: SequencerNodes) {
     return bestStart
   }
 
-  function selectWaveformSegment(group: Group, waveformValues: Float32Array, windowLength: number, maxIterations: number) {
+  function selectWaveformSegment(
+    group: Group,
+    waveformValues: Float32Array,
+    windowLength: number,
+    cycleLength: number,
+    maxIterations: number,
+  ) {
     const effectiveWindow = Math.min(windowLength, waveformValues.length)
     const state = waveformWindowState[group]
 
@@ -299,15 +309,22 @@ export function createVisuals(nodes: SequencerNodes) {
     }
 
     const maxStart = Math.max(0, waveformValues.length - effectiveWindow)
-    const cycleLength = Math.max(Math.floor(effectiveWindow / 4), 1)
-    const startMax = Math.min(maxStart, cycleLength * 4)
-    let startIndex = 0
+    const searchSpan = Math.min(maxStart, Math.max(Math.floor(cycleLength / 2), 1))
+    const startMin = Math.max(0, maxStart - searchSpan)
+    const startMax = maxStart
+    let startIndex = startMax
 
-    if (state.prevSegment && state.prevSegment.length === effectiveWindow && startMax > 0) {
-      const centerStart = Math.max(0, Math.min(state.prevStart, startMax))
-      startIndex = findBestCorrelationStart(waveformValues, state.prevSegment, effectiveWindow, centerStart, startMax, maxIterations)
-    } else if (startMax > 0) {
-      startIndex = Math.floor(startMax / 2)
+    if (state.prevSegment && state.prevSegment.length === effectiveWindow && startMax > startMin) {
+      const centerStart = Math.max(startMin, Math.min(state.prevStart, startMax))
+      startIndex = findBestCorrelationStart(
+        waveformValues,
+        state.prevSegment,
+        effectiveWindow,
+        centerStart,
+        startMax,
+        maxIterations,
+        startMin,
+      )
     }
 
     const segment = waveformValues.slice(startIndex, startIndex + effectiveWindow)
@@ -342,15 +359,20 @@ export function createVisuals(nodes: SequencerNodes) {
     fftSize: CanvasSize,
   ): { waveformMs: number; fftMs: number } {
     const waveformStart = performance.now()
-    const windowLength = calculateWindowSamples(group)
-    ensureWaveformBuffer(waveformAnalyser, windowLength)
+    const cycleLength = calculateCycleSamples(group)
+    const targetWindowLength = calculateWindowSamples(group)
+    ensureWaveformBuffer(waveformAnalyser, targetWindowLength)
     const latestFrame = waveformAnalyser.getValue() as Float32Array
     writeRingBuffer(group, latestFrame)
-    const waveformValues =
-      windowLength <= latestFrame.length ? latestFrame : readRingBuffer(group, Math.min(windowLength, WAVEFORM_BUFFER_MAX))
+    const desiredBufferLength = Math.min(WAVEFORM_BUFFER_MAX, targetWindowLength + cycleLength)
+    const waveformValues = readRingBuffer(group, desiredBufferLength)
+    const availableCycles = waveformValues.length / Math.max(cycleLength, 1)
+    const displayCycles =
+      availableCycles >= 4 ? 4 : availableCycles >= 3 ? 3 : availableCycles >= 2 ? 2 : availableCycles >= 1 ? 1 : 0.5
+    const windowLength = Math.min(waveformValues.length, Math.max(Math.round(displayCycles * cycleLength), 1))
     const waveformWidth = waveformSize.width || waveformCanvas.width
     const searchIterations = Math.max(1, Math.min(waveformWidth > 0 ? Math.round(waveformWidth) : 400, 400))
-    const waveformSegment = selectWaveformSegment(group, waveformValues, windowLength, searchIterations)
+    const waveformSegment = selectWaveformSegment(group, waveformValues, windowLength, cycleLength, searchIterations)
     const waveformData = waveformSegment.length ? waveformSegment : waveformValues
     const gainState = waveformGainState[group]
     let maxAbs = 0
@@ -408,6 +430,12 @@ export function createVisuals(nodes: SequencerNodes) {
       }
     }
     waveformCtx.stroke()
+    if (displayCycles < 4) {
+      waveformCtx.fillStyle = 'rgba(124, 242, 194, 0.85)'
+      waveformCtx.font = '12px "JetBrains Mono", monospace'
+      waveformCtx.textBaseline = 'top'
+      waveformCtx.fillText(displayCycles.toString(), 8, 6)
+    }
 
     const waveformMs = performance.now() - waveformStart
 
