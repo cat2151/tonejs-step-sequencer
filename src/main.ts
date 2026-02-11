@@ -64,7 +64,7 @@ if (app) {
       <section class="panel">
         <div class="details">
           <div class="ndjson-header">
-            <label class="label" for="ndjson">NDJSON payload</label>
+            <label class="label" for="ndjson" id="ndjson-label">NDJSON payload</label>
             <div class="ndjson-actions">
               <button
                 type="button"
@@ -123,6 +123,7 @@ const ndjsonErrorText = document.querySelector<HTMLPreElement>('#ndjson-error-te
 const ndjsonToggle = document.querySelector<HTMLButtonElement>('#ndjson-toggle')
 const ndjsonContainer = document.querySelector<HTMLDivElement>('#ndjson-container')
 const ndjsonTextarea = document.querySelector<HTMLTextAreaElement>('#ndjson')
+const ndjsonLabel = document.querySelector<HTMLLabelElement>('#ndjson-label')
 
 toggleButton?.focus()
 
@@ -199,6 +200,10 @@ function toggleNdjsonVisibility(force?: boolean) {
 }
 
 ndjsonToggle?.addEventListener('click', () => toggleNdjsonVisibility())
+ndjsonLabel?.addEventListener('click', () => {
+  toggleNdjsonVisibility(true)
+  ndjsonTextarea?.focus()
+})
 
 function previewNdjsonValidation(ndjson: string) {
   try {
