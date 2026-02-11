@@ -72,12 +72,19 @@ if (app) {
                 class="ndjson-error-button"
                 id="ndjson-error-toggle"
                 aria-expanded="false"
+                aria-controls="ndjson-error-details"
               >
                 Show error
               </button>
             </div>
           </div>
-          <div class="ndjson-error-details" id="ndjson-error-details" hidden>
+          <div
+            class="ndjson-error-details"
+            id="ndjson-error-details"
+            role="region"
+            aria-labelledby="ndjson-error-label"
+            hidden
+          >
             <pre id="ndjson-error-text"></pre>
           </div>
           <textarea id="ndjson" class="text-input tone-textarea" rows="8" spellcheck="false"></textarea>
@@ -108,6 +115,9 @@ let sequenceUpdatePromise: Promise<void> | null = null
 
 const visuals = createVisuals(nodes)
 
+type NdjsonErrorKind = 'preview' | 'runtime'
+let ndjsonErrorKind: NdjsonErrorKind | null = null
+
 function formatErrorDetail(error: unknown) {
   if (error instanceof Error) {
     return error.stack ?? `${error.name}: ${error.message}`
@@ -122,8 +132,9 @@ function formatErrorDetail(error: unknown) {
   }
 }
 
-function setNdjsonError(message: string, detail?: unknown) {
+function setNdjsonError(message: string, detail?: unknown, kind: NdjsonErrorKind = 'runtime') {
   if (!ndjsonError || !ndjsonErrorLabel || !ndjsonErrorToggle || !ndjsonErrorDetails || !ndjsonErrorText) return
+  ndjsonErrorKind = kind
   ndjsonErrorLabel.textContent = message
   ndjsonError.removeAttribute('hidden')
   ndjsonErrorToggle.removeAttribute('hidden')
@@ -133,8 +144,10 @@ function setNdjsonError(message: string, detail?: unknown) {
   ndjsonErrorText.textContent = detail !== undefined ? formatErrorDetail(detail) : message
 }
 
-function clearNdjsonError() {
+function clearNdjsonError(kind?: NdjsonErrorKind) {
+  if (kind && ndjsonErrorKind && ndjsonErrorKind !== kind) return
   if (!ndjsonError || !ndjsonErrorToggle || !ndjsonErrorDetails || !ndjsonErrorText) return
+  ndjsonErrorKind = null
   ndjsonError.setAttribute('hidden', '')
   ndjsonErrorToggle.setAttribute('aria-expanded', 'false')
   ndjsonErrorToggle.textContent = 'Show error'
@@ -160,11 +173,9 @@ ndjsonErrorToggle?.addEventListener('click', () => toggleNdjsonErrorDetails())
 function previewNdjsonValidation(ndjson: string) {
   try {
     parseNDJSON(ndjson)
-    if (!player.playing && !startingPromise) {
-      clearNdjsonError()
-    }
+    clearNdjsonError('preview')
   } catch (error) {
-    setNdjsonError('Failed to parse NDJSON', error)
+    setNdjsonError('Failed to parse NDJSON', error, 'preview')
   }
 }
 
@@ -239,7 +250,7 @@ async function queueSequenceUpdate() {
     applyToneUpdates(ndjson)
     try {
       await player.start(ndjson)
-      clearNdjsonError()
+      clearNdjsonError('runtime')
     } catch (error) {
       setNdjsonError('Failed to apply sequence update', error)
       throw error
@@ -252,7 +263,6 @@ async function queueSequenceUpdate() {
     await thisUpdate
   } catch (error) {
     console.error('Failed to apply sequence update', error)
-    setNdjsonError('Failed to apply sequence update', error)
     stopLoop()
   } finally {
     if (sequenceUpdatePromise === thisUpdate) {
@@ -292,7 +302,7 @@ async function startLoop() {
 
     try {
       await player.start(ndjson)
-      clearNdjsonError()
+      clearNdjsonError('runtime')
     } catch (error) {
       setNdjsonError('Failed to start loop', error)
       throw error
@@ -306,7 +316,6 @@ async function startLoop() {
     await thisStart
   } catch (error) {
     console.error('Failed to start loop', error)
-    setNdjsonError('Failed to start loop', error)
     setStatus('idle')
     visuals.stopVisuals()
     throw error
