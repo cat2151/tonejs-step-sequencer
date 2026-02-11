@@ -141,11 +141,24 @@ export function renderToneControl(group: Group, noteGrid: HTMLDivElement | null,
 
   toneControls[group] = { toggle, body, presetSelect, mmlTextarea, jsonTextarea, status }
 
+  let mmlInputTimeout: number | undefined
   toggle.addEventListener('click', () => toggleToneSection(group))
   presetSelect.addEventListener('change', () => {
     void handleTonePresetChange(group, presetSelect.value, onSequenceChange)
   })
+  mmlTextarea.addEventListener('input', () => {
+    if (mmlInputTimeout) {
+      window.clearTimeout(mmlInputTimeout)
+    }
+    mmlInputTimeout = window.setTimeout(() => {
+      void handleToneMmlChange(group, mmlTextarea.value, onSequenceChange)
+    }, 300)
+  })
   mmlTextarea.addEventListener('change', () => {
+    if (mmlInputTimeout) {
+      window.clearTimeout(mmlInputTimeout)
+      mmlInputTimeout = undefined
+    }
     void handleToneMmlChange(group, mmlTextarea.value, onSequenceChange)
   })
   jsonTextarea.addEventListener('change', () => {
