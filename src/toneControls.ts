@@ -10,6 +10,8 @@ import {
 
 type SequenceChangeHandler = () => Promise<void>
 
+const toneMmlPromises: Record<Group, Promise<void>> = { A: Promise.resolve(), B: Promise.resolve() }
+
 export function setToneSectionOpen(group: Group, open: boolean) {
   const controls = toneControls[group]
   if (!controls) return
@@ -35,7 +37,12 @@ export function updateToneControls(group: Group) {
   const controls = toneControls[group]
   if (!controls) return
   controls.presetSelect.value = toneStates[group].presetId
-  controls.mmlTextarea.value = toneStates[group].mmlText
+  if (
+    document.activeElement !== controls.mmlTextarea &&
+    controls.mmlTextarea.value !== toneStates[group].mmlText
+  ) {
+    controls.mmlTextarea.value = toneStates[group].mmlText
+  }
   controls.jsonTextarea.value = toneStates[group].jsonText
   setToneSectionOpen(group, toneStates[group].open)
   updateToneStatus(group)
@@ -58,9 +65,12 @@ export async function handleTonePresetChange(group: Group, presetId: string, onS
 }
 
 export async function handleToneMmlChange(group: Group, mmlText: string, onSequenceChange: SequenceChangeHandler) {
-  await applyMmlToToneState(group, mmlText)
-  updateToneControls(group)
-  await onSequenceChange()
+  toneMmlPromises[group] = toneMmlPromises[group].then(async () => {
+    await applyMmlToToneState(group, mmlText)
+    updateToneControls(group)
+    await onSequenceChange()
+  })
+  await toneMmlPromises[group]
 }
 
 export async function handleToneJsonChange(group: Group, jsonText: string, onSequenceChange: SequenceChangeHandler) {
@@ -141,11 +151,25 @@ export function renderToneControl(group: Group, noteGrid: HTMLDivElement | null,
 
   toneControls[group] = { toggle, body, presetSelect, mmlTextarea, jsonTextarea, status }
 
+  let mmlInputTimeout: number | null = null
   toggle.addEventListener('click', () => toggleToneSection(group))
   presetSelect.addEventListener('change', () => {
     void handleTonePresetChange(group, presetSelect.value, onSequenceChange)
   })
+  mmlTextarea.addEventListener('input', () => {
+    if (mmlInputTimeout !== null) {
+      window.clearTimeout(mmlInputTimeout)
+    }
+    mmlInputTimeout = window.setTimeout(() => {
+      void handleToneMmlChange(group, mmlTextarea.value, onSequenceChange)
+      mmlInputTimeout = null
+    }, 300)
+  })
   mmlTextarea.addEventListener('change', () => {
+    if (mmlInputTimeout !== null) {
+      window.clearTimeout(mmlInputTimeout)
+      mmlInputTimeout = null
+    }
     void handleToneMmlChange(group, mmlTextarea.value, onSequenceChange)
   })
   jsonTextarea.addEventListener('change', () => {
