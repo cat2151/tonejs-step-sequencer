@@ -1,6 +1,12 @@
 import defaultRandomDefinitions from './randomToneDefinitions.json' with { type: 'json' }
 
-export type RandomParamDefinition = { path: string; min: number; max: number; integer?: boolean }
+export type RandomParamDefinition = {
+  path: string
+  min?: number
+  max?: number
+  values?: number[]
+  integer?: boolean
+}
 export const DEFAULT_RANDOM_DEFINITIONS = JSON.stringify(defaultRandomDefinitions, null, 2)
 
 type ToneJsonBlock = {
@@ -10,21 +16,19 @@ type ToneJsonBlock = {
   json: Record<string, unknown>
 }
 
-const FILTER_ROLLOFF_OPTIONS = [-12, -24, -48, -96]
-
-function adjustRandomValue(path: string, value: number) {
-  if (path.endsWith('.rolloff')) {
-    return FILTER_ROLLOFF_OPTIONS.reduce((closest, option) => {
-      return Math.abs(option - value) < Math.abs(closest - value) ? option : closest
-    }, FILTER_ROLLOFF_OPTIONS[0])
-  }
-  return value
-}
-
 function normalizeRandomEntry(entry: unknown, index: number): RandomParamDefinition {
   if (Array.isArray(entry)) {
     const [path, min, max, integer] = entry
-    if (typeof path !== 'string' || typeof min !== 'number' || typeof max !== 'number') {
+    if (typeof path !== 'string') {
+      throw new Error(`Entry at index ${index} must start with a path string`)
+    }
+    if (Array.isArray(min)) {
+      if (!min.length || !min.every((v) => typeof v === 'number')) {
+        throw new Error(`Entry at index ${index} must include numeric values`)
+      }
+      return { path, values: min, integer: typeof max === 'boolean' ? max : undefined }
+    }
+    if (typeof min !== 'number' || typeof max !== 'number') {
       throw new Error(`Entry at index ${index} must be [path, min, max, integer?]`)
     }
     return { path, min, max, integer: typeof integer === 'boolean' ? integer : undefined }
@@ -33,8 +37,18 @@ function normalizeRandomEntry(entry: unknown, index: number): RandomParamDefinit
     const path = (entry as { path?: unknown }).path ?? (entry as { name?: unknown }).name
     const min = (entry as { min?: unknown }).min
     const max = (entry as { max?: unknown }).max
+    const values = (entry as { values?: unknown }).values
     const integer = (entry as { integer?: unknown }).integer
-    if (typeof path !== 'string' || typeof min !== 'number' || typeof max !== 'number') {
+    if (typeof path !== 'string') {
+      throw new Error(`Entry at index ${index} must include path`)
+    }
+    if (Array.isArray(values)) {
+      if (!values.length || !values.every((v) => typeof v === 'number')) {
+        throw new Error(`Entry at index ${index} must include numeric values`)
+      }
+      return { path, values, integer: typeof integer === 'boolean' ? integer : undefined }
+    }
+    if (typeof min !== 'number' || typeof max !== 'number') {
       throw new Error(`Entry at index ${index} must include path, min, and max`)
     }
     return { path, min, max, integer: typeof integer === 'boolean' ? integer : undefined }
@@ -157,29 +171,35 @@ export function applyRandomDefinitionsToMml(mmlText: string, definitions: Random
 
   let applied = false
   definitions.forEach((definition) => {
-    if (typeof definition.min !== 'number' || typeof definition.max !== 'number') return
-    const min = Math.min(definition.min, definition.max)
-    const max = Math.max(definition.min, definition.max)
+    const hasValues = Array.isArray(definition.values) && definition.values.length > 0
+    const valueOptions = hasValues ? definition.values : null
+    const min = typeof definition.min === 'number' ? definition.min : undefined
+    const max = typeof definition.max === 'number' ? definition.max : undefined
+    if (!hasValues && (min === undefined || max === undefined)) return
+    const low = min !== undefined && max !== undefined ? Math.min(min, max) : undefined
+    const high = min !== undefined && max !== undefined ? Math.max(min, max) : undefined
     const nodeSegments = definition.path.split('.')
     const candidateNodeType = nodeSegments.length > 1 ? nodeSegments[0] ?? '' : ''
     const hasNodePrefix = Boolean(candidateNodeType) && blocks.some((block) => block.nodeType === candidateNodeType)
     const pathSegments = hasNodePrefix ? nodeSegments.slice(1) : nodeSegments
-    const randomValue = min + Math.random() * (max - min)
-    const numericValue = definition.integer
-      ? (() => {
-          const intMin = Math.ceil(min)
-          const intMax = Math.floor(max)
-          if (intMin <= intMax) {
-            return intMin + Math.floor(Math.random() * (intMax - intMin + 1))
+    const numericValue = hasValues
+      ? valueOptions![Math.floor(Math.random() * valueOptions!.length)] ?? valueOptions![0]
+      : (() => {
+          const randomValue = (low ?? 0) + Math.random() * ((high ?? 0) - (low ?? 0))
+          if (definition.integer) {
+            const intMin = Math.ceil(low ?? 0)
+            const intMax = Math.floor(high ?? 0)
+            if (intMin <= intMax) {
+              return intMin + Math.floor(Math.random() * (intMax - intMin + 1))
+            }
+            const rounded = Math.round(randomValue)
+            return Math.min(Math.max(rounded, low ?? rounded), high ?? rounded)
           }
-          const rounded = Math.round(randomValue)
-          return Math.min(Math.max(rounded, min), max)
+          return Math.round(randomValue * 1000) / 1000
         })()
-      : Math.round(randomValue * 1000) / 1000
-    const valueToSet = adjustRandomValue(definition.path, numericValue)
     for (const block of blocks) {
       if (hasNodePrefix && block.nodeType !== candidateNodeType) continue
-      if (setValueAtPath(block.json, pathSegments, valueToSet)) {
+      if (setValueAtPath(block.json, pathSegments, numericValue)) {
         applied = true
         break
       }
