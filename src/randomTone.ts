@@ -14,7 +14,7 @@ function normalizeRandomEntry(entry: unknown, index: number): RandomParamDefinit
   if (Array.isArray(entry)) {
     const [path, min, max, integer] = entry
     if (typeof path !== 'string' || typeof min !== 'number' || typeof max !== 'number') {
-      throw new Error(`Entry at index ${index} must be [path, min, max]`)
+      throw new Error(`Entry at index ${index} must be [path, min, max, integer?]`)
     }
     return { path, min, max, integer: typeof integer === 'boolean' ? integer : undefined }
   }
@@ -155,7 +155,15 @@ export function applyRandomDefinitionsToMml(mmlText: string, definitions: Random
     const pathSegments = hasNodePrefix ? nodeSegments.slice(1) : nodeSegments
     const randomValue = min + Math.random() * (max - min)
     const numericValue = definition.integer
-      ? Math.round(randomValue)
+      ? (() => {
+          const intMin = Math.ceil(min)
+          const intMax = Math.floor(max)
+          if (intMin <= intMax) {
+            return intMin + Math.floor(Math.random() * (intMax - intMin + 1))
+          }
+          const rounded = Math.round(randomValue)
+          return Math.min(Math.max(rounded, min), max)
+        })()
       : Math.round(randomValue * 1000) / 1000
     for (const block of blocks) {
       if (hasNodePrefix && block.nodeType !== candidateNodeType) continue
