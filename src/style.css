@@ -450,7 +450,7 @@ h1 {
 .ndjson-container[hidden],
 .ndjson-error[hidden],
 .ndjson-error-details[hidden] {
-  display: none !important;
+  display: none;
 }
 
 .dot-error {
