@@ -25,6 +25,10 @@ export type ToneControls = {
   mmlTextarea: HTMLTextAreaElement
   jsonTextarea: HTMLTextAreaElement
   status: HTMLSpanElement
+  randomToggle: HTMLButtonElement
+  randomBody: HTMLDivElement
+  randomTextarea: HTMLTextAreaElement
+  randomError: HTMLDivElement
 }
 
 const TONE_EVENT_TYPES = new Set(['createNode', 'connect', 'set'])
