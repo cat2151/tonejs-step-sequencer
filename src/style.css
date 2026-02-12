@@ -447,6 +447,12 @@ h1 {
   gap: 0.35rem;
 }
 
+.ndjson-container[hidden],
+.ndjson-error[hidden],
+.ndjson-error-details[hidden] {
+  display: none !important;
+}
+
 .dot-error {
   background: #ff6b6b;
   box-shadow: 0 0 0 6px rgba(255, 107, 107, 0.22);
