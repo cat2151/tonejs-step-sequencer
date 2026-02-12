@@ -13,7 +13,7 @@ type SequenceChangeHandler = () => Promise<void>
 const toneMmlPromises: Record<Group, Promise<void>> = { A: Promise.resolve(), B: Promise.resolve() }
 
 type RandomParamDefinition = { path: string; min: number; max: number }
-type RandomState = { text: string; open: boolean; error: string; saveTimeout: number | null }
+type RandomState = { text: string | null; open: boolean; error: string; saveTimeout: number | null }
 
 const RANDOM_STORAGE_KEY = 'tonejs-random-definitions'
 const DEFAULT_RANDOM_DEFINITIONS = JSON.stringify(
@@ -29,8 +29,8 @@ const DEFAULT_RANDOM_DEFINITIONS = JSON.stringify(
   2,
 )
 const randomStates: Record<Group, RandomState> = {
-  A: { text: '', open: false, error: '', saveTimeout: null },
-  B: { text: '', open: false, error: '', saveTimeout: null },
+  A: { text: null, open: false, error: '', saveTimeout: null },
+  B: { text: null, open: false, error: '', saveTimeout: null },
 }
 
 function getRandomStorageKey(group: Group) {
@@ -38,11 +38,11 @@ function getRandomStorageKey(group: Group) {
 }
 
 function loadRandomDefinitions(group: Group) {
-  if (randomStates[group].text) return randomStates[group].text
+  if (randomStates[group].text !== null) return randomStates[group].text
   const key = getRandomStorageKey(group)
   try {
     const stored = localStorage.getItem(key)
-    if (stored) {
+    if (stored !== null) {
       randomStates[group].text = stored
       return stored
     }
@@ -65,7 +65,7 @@ function scheduleRandomSave(group: Group, text: string) {
       console.warn('Failed to persist random tone definitions', error)
     }
     state.saveTimeout = null
-  }, 400)
+  }, 300)
 }
 
 function setRandomError(group: Group, message: string) {
@@ -171,7 +171,7 @@ function extractToneJsonBlocks(mmlText: string): ToneJsonBlock[] {
         blocks.push({ jsonStart: braceIndex, jsonEnd: endIndex, json: parsed as Record<string, unknown> })
       }
     } catch (error) {
-      console.warn('Failed to parse tone JSON block', error)
+      throw new Error('ランダム適用対象のトーンJSONが壊れています')
     }
     pattern.lastIndex = endIndex + 1
   }
@@ -507,7 +507,14 @@ export function renderToneControl(group: Group, noteGrid: HTMLDivElement | null,
       return
     }
     const currentMml = mmlTextarea.value || toneStates[group].mmlText
-    const result = applyRandomDefinitionsToMml(currentMml, definitions)
+    let result
+    try {
+      result = applyRandomDefinitionsToMml(currentMml, definitions)
+    } catch (error) {
+      console.warn('Failed to apply random tone definitions', error)
+      setRandomError(group, error instanceof Error ? error.message : 'トーンJSONの解析に失敗しました')
+      return
+    }
     if (!result.applied) {
       setRandomError(group, '適用できるパラメータが見つかりませんでした')
       return
@@ -515,6 +522,10 @@ export function renderToneControl(group: Group, noteGrid: HTMLDivElement | null,
     setRandomError(group, '')
     randomStates[group].text = randomTextarea.value
     scheduleRandomSave(group, randomTextarea.value)
+    if (mmlInputTimeout !== null) {
+      window.clearTimeout(mmlInputTimeout)
+      mmlInputTimeout = null
+    }
     mmlTextarea.value = result.mml
     void handleToneMmlChange(group, result.mml, onSequenceChange)
   })
