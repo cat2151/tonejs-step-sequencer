@@ -7,27 +7,20 @@ import {
   tonePresets,
   toneStates,
 } from './toneState'
+import {
+  DEFAULT_RANDOM_DEFINITIONS,
+  applyRandomDefinitionsToMml,
+  parseRandomDefinitions,
+  type RandomParamDefinition,
+} from './randomTone'
 
 type SequenceChangeHandler = () => Promise<void>
 
 const toneMmlPromises: Record<Group, Promise<void>> = { A: Promise.resolve(), B: Promise.resolve() }
 
-type RandomParamDefinition = { path: string; min: number; max: number }
 type RandomState = { text: string | null; open: boolean; error: string; saveTimeout: number | null }
 
 const RANDOM_STORAGE_KEY = 'tonejs-random-definitions'
-const DEFAULT_RANDOM_DEFINITIONS = JSON.stringify(
-  [
-    ['envelope.attack', 0.02, 0.35],
-    ['envelope.decay', 0.08, 0.8],
-    ['envelope.sustain', 0.25, 0.95],
-    ['envelope.release', 0.35, 1.6],
-    ['detune', -60, 60],
-    ['harmonicity', 0.6, 7],
-  ],
-  null,
-  2,
-)
 const randomStates: Record<Group, RandomState> = {
   A: { text: null, open: false, error: '', saveTimeout: null },
   B: { text: null, open: false, error: '', saveTimeout: null },
@@ -92,156 +85,6 @@ function setRandomSectionOpen(group: Group, open: boolean) {
     controls.randomBody.setAttribute('hidden', '')
   }
   controls.randomToggle.setAttribute('aria-expanded', open ? 'true' : 'false')
-}
-
-function normalizeRandomEntry(entry: unknown, index: number): RandomParamDefinition {
-  if (Array.isArray(entry)) {
-    const [path, min, max] = entry
-    if (typeof path !== 'string' || typeof min !== 'number' || typeof max !== 'number') {
-      throw new Error(`Entry at index ${index} must be [path, min, max]`)
-    }
-    return { path, min, max }
-  }
-  if (entry && typeof entry === 'object') {
-    const path = (entry as { path?: unknown }).path ?? (entry as { name?: unknown }).name
-    const min = (entry as { min?: unknown }).min
-    const max = (entry as { max?: unknown }).max
-    if (typeof path !== 'string' || typeof min !== 'number' || typeof max !== 'number') {
-      throw new Error(`Entry at index ${index} must include path, min, and max`)
-    }
-    return { path, min, max }
-  }
-  throw new Error(`Entry at index ${index} must be an array or object`)
-}
-
-function parseRandomDefinitions(text: string): RandomParamDefinition[] {
-  const parsed = JSON.parse(text) as unknown
-  if (!Array.isArray(parsed)) {
-    throw new Error('Random tone definition JSON must be an array')
-  }
-  return parsed.map((entry, index) => normalizeRandomEntry(entry, index))
-}
-
-type ToneJsonBlock = { jsonStart: number; jsonEnd: number; json: Record<string, unknown> }
-
-function findMatchingBrace(text: string, startIndex: number) {
-  let depth = 0
-  let inString = false
-  let escape = false
-  for (let i = startIndex; i < text.length; i += 1) {
-    const char = text[i]
-    if (escape) {
-      escape = false
-      continue
-    }
-    if (char === '\\') {
-      escape = true
-      continue
-    }
-    if (char === '"') {
-      inString = !inString
-      continue
-    }
-    if (inString) continue
-    if (char === '{') {
-      depth += 1
-    } else if (char === '}') {
-      depth -= 1
-      if (depth === 0) {
-        return i
-      }
-    }
-  }
-  return -1
-}
-
-function extractToneJsonBlocks(mmlText: string): ToneJsonBlock[] {
-  const blocks: ToneJsonBlock[] = []
-  const pattern = /@[A-Za-z0-9_]+\s*{/g
-  let match: RegExpExecArray | null
-  while ((match = pattern.exec(mmlText)) !== null) {
-    const braceIndex = mmlText.indexOf('{', match.index)
-    if (braceIndex === -1) continue
-    const endIndex = findMatchingBrace(mmlText, braceIndex)
-    if (endIndex === -1) continue
-    const jsonText = mmlText.slice(braceIndex, endIndex + 1)
-    try {
-      const parsed = JSON.parse(jsonText) as unknown
-      if (parsed && typeof parsed === 'object') {
-        blocks.push({ jsonStart: braceIndex, jsonEnd: endIndex, json: parsed as Record<string, unknown> })
-      }
-    } catch (error) {
-      throw new Error('ランダム適用対象のトーンJSONが壊れています')
-    }
-    pattern.lastIndex = endIndex + 1
-  }
-  return blocks
-}
-
-function setValueAtPath(target: unknown, path: string, value: number) {
-  if (!target || typeof target !== 'object') return false
-  const segments = path.split('.')
-  let current: unknown = target
-  for (let i = 0; i < segments.length; i += 1) {
-    const segment = segments[i] ?? ''
-    const isLast = i === segments.length - 1
-    if (Array.isArray(current)) {
-      const index = Number(segment)
-      if (!Number.isInteger(index) || index < 0 || index >= current.length) return false
-      if (isLast) {
-        if (typeof current[index] !== 'number') return false
-        current[index] = value
-        return true
-      }
-      current = current[index]
-      continue
-    }
-    if (!current || typeof current !== 'object') return false
-    const container = current as Record<string, unknown>
-    if (!(segment in container)) return false
-    if (isLast) {
-      if (typeof container[segment] !== 'number') return false
-      container[segment] = value
-      return true
-    }
-    current = container[segment]
-  }
-  return false
-}
-
-function rebuildMmlFromBlocks(mmlText: string, blocks: ToneJsonBlock[]) {
-  let result = ''
-  let cursor = 0
-  blocks.forEach((block) => {
-    result += mmlText.slice(cursor, block.jsonStart)
-    result += JSON.stringify(block.json, null, 2)
-    cursor = block.jsonEnd + 1
-  })
-  result += mmlText.slice(cursor)
-  return result
-}
-
-function applyRandomDefinitionsToMml(mmlText: string, definitions: RandomParamDefinition[]) {
-  const blocks = extractToneJsonBlocks(mmlText)
-  if (!blocks.length) return { applied: false, mml: mmlText }
-
-  let applied = false
-  definitions.forEach((definition) => {
-    if (typeof definition.min !== 'number' || typeof definition.max !== 'number') return
-    const min = Math.min(definition.min, definition.max)
-    const max = Math.max(definition.min, definition.max)
-    const randomValue = min + Math.random() * (max - min)
-    const rounded = Math.round(randomValue * 1000) / 1000
-    for (const block of blocks) {
-      if (setValueAtPath(block.json, definition.path, rounded)) {
-        applied = true
-        break
-      }
-    }
-  })
-
-  if (!applied) return { applied: false, mml: mmlText }
-  return { applied: true, mml: rebuildMmlFromBlocks(mmlText, blocks) }
 }
 
 export function setToneSectionOpen(group: Group, open: boolean) {
