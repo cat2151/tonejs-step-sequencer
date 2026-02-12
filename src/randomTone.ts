@@ -10,6 +10,17 @@ type ToneJsonBlock = {
   json: Record<string, unknown>
 }
 
+const FILTER_ROLLOFF_OPTIONS = [-12, -24, -48, -96]
+
+function adjustRandomValue(path: string, value: number) {
+  if (path.endsWith('.rolloff')) {
+    return FILTER_ROLLOFF_OPTIONS.reduce((closest, option) => {
+      return Math.abs(option - value) < Math.abs(closest - value) ? option : closest
+    }, FILTER_ROLLOFF_OPTIONS[0])
+  }
+  return value
+}
+
 function normalizeRandomEntry(entry: unknown, index: number): RandomParamDefinition {
   if (Array.isArray(entry)) {
     const [path, min, max, integer] = entry
@@ -165,9 +176,10 @@ export function applyRandomDefinitionsToMml(mmlText: string, definitions: Random
           return Math.min(Math.max(rounded, min), max)
         })()
       : Math.round(randomValue * 1000) / 1000
+    const valueToSet = adjustRandomValue(definition.path, numericValue)
     for (const block of blocks) {
       if (hasNodePrefix && block.nodeType !== candidateNodeType) continue
-      if (setValueAtPath(block.json, pathSegments, numericValue)) {
+      if (setValueAtPath(block.json, pathSegments, valueToSet)) {
         applied = true
         break
       }

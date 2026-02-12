@@ -26,7 +26,7 @@
   { "path": "MonoSynth.filter.detune", "min": -60, "max": 60 },
   { "path": "MonoSynth.filter.frequency", "min": 80, "max": 4000 },
   { "path": "MonoSynth.filter.gain", "min": -12, "max": 12 },
-  { "path": "MonoSynth.filter.rolloff", "min": -12, "max": -12, "integer": true },
+  { "path": "MonoSynth.filter.rolloff", "min": -96, "max": -12, "integer": true },
   { "path": "MonoSynth.envelope.attack", "min": 0.01, "max": 0.4 },
   { "path": "MonoSynth.envelope.decay", "min": 0.1, "max": 0.6 },
   { "path": "MonoSynth.envelope.sustain", "min": 0.2, "max": 0.8 },
