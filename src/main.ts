@@ -4,9 +4,11 @@ import './responsive.css'
 import * as Tone from 'tone'
 import { NDJSONStreamingPlayer, SequencerNodes, parseNDJSON, type SequenceEvent } from 'tonejs-json-sequencer'
 import { DEFAULT_BPM, MONITOR_A_NODE_ID, MONITOR_B_NODE_ID, PPQ, type Group } from './constants'
+import { createAutoGainManager } from './autoGain'
 import {
   buildSequenceFromNotes,
   getNdjsonSequence,
+  getLoopDurationSeconds,
   initializeNoteGrid,
   randomizeAll,
   updateLoopNote,
@@ -201,10 +203,17 @@ function setMonitorGain(nodeId: number, gain: number) {
   }
 }
 
+const autoGainManager = createAutoGainManager(nodes)
+let autoGains: Record<Group, number> = { A: 1, B: 1 }
+
+function resetAutoGains() {
+  autoGains = { A: 1, B: 1 }
+}
+
 function applyMixing() {
   const mode = mixingModes[mixingIndex] ?? mixingModes[0]
-  setMonitorGain(MONITOR_A_NODE_ID, mode.gains.A)
-  setMonitorGain(MONITOR_B_NODE_ID, mode.gains.B)
+  setMonitorGain(MONITOR_A_NODE_ID, mode.gains.A * autoGains.A)
+  setMonitorGain(MONITOR_B_NODE_ID, mode.gains.B * autoGains.B)
 }
 
 function resetMixing() {
@@ -221,6 +230,20 @@ function cycleMixing() {
 
 updateMixingLabel()
 mixingButton?.addEventListener('click', cycleMixing)
+
+function refreshAutoGain() {
+  if (!player.playing) return
+  const loopSeconds = getLoopDurationSeconds()
+  autoGainManager
+    .measure(loopSeconds)
+    .then((gains) => {
+      autoGains = gains
+      applyMixing()
+    })
+    .catch((error) => {
+      console.warn('Failed to refresh auto gain', error)
+    })
+}
 
 function formatErrorDetail(error: unknown) {
   if (error instanceof Error) {
@@ -373,6 +396,7 @@ async function queueSequenceUpdate() {
     try {
       await player.start(ndjson)
       clearNdjsonError('runtime')
+      refreshAutoGain()
     } catch (error) {
       setNdjsonError('Failed to apply sequence update', error)
       throw error
@@ -421,6 +445,7 @@ async function startLoop() {
     Tone.Transport.stop()
     nodes.disposeAll()
     visuals.setupMonitorBus()
+    resetAutoGains()
     applyMixing()
 
     try {
@@ -432,6 +457,7 @@ async function startLoop() {
     }
     setStatus('playing')
     visuals.startVisuals()
+    refreshAutoGain()
   })()
 
   startingPromise = thisStart

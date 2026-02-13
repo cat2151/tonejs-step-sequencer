@@ -5,6 +5,7 @@ import {
   DEFAULT_MIDI_NOTE,
   DEFAULT_NOTE_ROWS,
   GROUP_SIZE,
+  PPQ,
   SIXTEENTH_TICKS,
   STEPS,
   type Group,
@@ -23,6 +24,8 @@ const noteNumbersB = selectedRowsB.map((row) => noteNameToMidi(rowNoteNames[row]
 let bpmValue = DEFAULT_BPM
 let ndjsonSequence = ''
 const bpmMap = Array.from({ length: STEPS }, () => DEFAULT_BPM)
+let loopTicksCache = 0
+let loopSecondsCache = 0
 
 let noteGrid: HTMLDivElement | null = null
 let ndjsonElement: HTMLTextAreaElement | null = null
@@ -160,7 +163,15 @@ function buildTimingMap() {
     startTicks.push(Math.round(tickCursor))
     tickCursor += getStepTicks(step)
   }
-  return { startTicks, loopTicks: Math.round(tickCursor) }
+  loopTicksCache = Math.round(tickCursor)
+  loopSecondsCache = ticksToSeconds(loopTicksCache)
+  return { startTicks, loopTicks: loopTicksCache }
+}
+
+function ticksToSeconds(loopTicks: number) {
+  const bpm = Tone.Transport.bpm?.value ?? DEFAULT_BPM
+  const secondsPerTick = (60 / bpm) / PPQ
+  return loopTicks * secondsPerTick
 }
 
 export function buildSequenceFromNotes() {
@@ -206,6 +217,13 @@ export function buildSequenceFromNotes() {
 
 export function getNdjsonSequence() {
   return ndjsonSequence
+}
+
+export function getLoopDurationSeconds() {
+  if (!Number.isFinite(loopSecondsCache) || loopSecondsCache <= 0) {
+    loopSecondsCache = ticksToSeconds(loopTicksCache || buildTimingMap().loopTicks)
+  }
+  return loopSecondsCache
 }
 
 function updateGridActiveStates() {
