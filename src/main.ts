@@ -1,4 +1,5 @@
 import './style.css'
+import './controls.css'
 import './responsive.css'
 import * as Tone from 'tone'
 import { NDJSONStreamingPlayer, SequencerNodes, parseNDJSON, type SequenceEvent } from 'tonejs-json-sequencer'
