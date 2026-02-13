@@ -3,7 +3,7 @@ import './controls.css'
 import './responsive.css'
 import * as Tone from 'tone'
 import { NDJSONStreamingPlayer, SequencerNodes, parseNDJSON, type SequenceEvent } from 'tonejs-json-sequencer'
-import { DEFAULT_BPM, PPQ } from './constants'
+import { DEFAULT_BPM, MONITOR_A_NODE_ID, MONITOR_B_NODE_ID, PPQ, type Group } from './constants'
 import {
   buildSequenceFromNotes,
   getNdjsonSequence,
@@ -32,6 +32,7 @@ if (app) {
         <div class="controls">
           <button id="toggle" type="button" class="primary">Play</button>
           <button id="random-all" type="button" class="note-grid-button">すべてランダム</button>
+          <button id="mixing" type="button" class="note-grid-button">Mixing 1:1</button>
           <div class="status">
             <span class="dot dot-idle" id="dot"></span>
             <span id="status-label"></span>
@@ -138,6 +139,7 @@ const ndjsonContainer = document.querySelector<HTMLDivElement>('#ndjson-containe
 const ndjsonTextarea = document.querySelector<HTMLTextAreaElement>('#ndjson')
 const ndjsonLabel = document.querySelector<HTMLLabelElement>('#ndjson-label')
 const randomAllButton = document.querySelector<HTMLButtonElement>('#random-all')
+const mixingButton = document.querySelector<HTMLButtonElement>('#mixing')
 
 toggleButton?.focus()
 
@@ -148,6 +150,77 @@ const visuals = createVisuals(nodes)
 
 type NdjsonErrorKind = 'preview' | 'runtime'
 let ndjsonErrorKind: NdjsonErrorKind | null = null
+
+type MixingMode = { label: string; gains: Record<Group, number> }
+
+const mixingModes: MixingMode[] = [
+  { label: '1:1', gains: { A: 1, B: 1 } },
+  { label: '2:1', gains: { A: 1, B: 0.5 } },
+  { label: '1:2', gains: { A: 0.5, B: 1 } },
+]
+
+let mixingIndex = 0
+
+function updateMixingLabel() {
+  if (!mixingButton) return
+  mixingButton.textContent = `Mixing ${mixingModes[mixingIndex]?.label ?? '1:1'}`
+}
+
+function setMonitorGain(nodeId: number, gain: number) {
+  const node = nodes.get(nodeId)
+  if (!node) {
+    console.warn(`Monitor bus not found for node ID ${nodeId}`)
+    return
+  }
+  if (!(node instanceof Tone.Gain)) {
+    console.warn(`Expected Tone.Gain monitor bus for node ID ${nodeId}, but got:`, node)
+    return
+  }
+
+  const gainParam = node.gain
+  const now = Tone.now()
+  const rampDuration = 0.01
+
+  if (typeof gainParam.cancelScheduledValues === 'function') {
+    gainParam.cancelScheduledValues(now)
+  }
+
+  if (
+    typeof gainParam.setValueAtTime === 'function' &&
+    typeof gainParam.linearRampToValueAtTime === 'function'
+  ) {
+    const currentValue = typeof gainParam.value === 'number' ? gainParam.value : gain
+    gainParam.setValueAtTime(currentValue, now)
+    gainParam.linearRampToValueAtTime(gain, now + rampDuration)
+  } else if (typeof gainParam.setValueAtTime === 'function') {
+    gainParam.setValueAtTime(gain, now)
+  } else if (typeof gainParam.value === 'number') {
+    gainParam.value = gain
+  } else {
+    console.warn(`Monitor bus gain param has an unexpected shape for node ID ${nodeId}:`, gainParam)
+  }
+}
+
+function applyMixing() {
+  const mode = mixingModes[mixingIndex] ?? mixingModes[0]
+  setMonitorGain(MONITOR_A_NODE_ID, mode.gains.A)
+  setMonitorGain(MONITOR_B_NODE_ID, mode.gains.B)
+}
+
+function resetMixing() {
+  mixingIndex = 0
+  updateMixingLabel()
+  applyMixing()
+}
+
+function cycleMixing() {
+  mixingIndex = (mixingIndex + 1) % mixingModes.length
+  updateMixingLabel()
+  applyMixing()
+}
+
+updateMixingLabel()
+mixingButton?.addEventListener('click', cycleMixing)
 
 function formatErrorDetail(error: unknown) {
   if (error instanceof Error) {
@@ -348,6 +421,7 @@ async function startLoop() {
     Tone.Transport.stop()
     nodes.disposeAll()
     visuals.setupMonitorBus()
+    applyMixing()
 
     try {
       await player.start(ndjson)
@@ -387,6 +461,7 @@ toggleButton?.addEventListener('click', () => {
 })
 
 randomAllButton?.addEventListener('click', () => {
+  resetMixing()
   const randomizePromise = randomizeAll(applySequenceChange)
   if (player.playing) {
     void randomizePromise
