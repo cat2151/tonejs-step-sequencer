@@ -169,7 +169,12 @@ function buildTimingMap() {
 }
 
 function ticksToSeconds(loopTicks: number) {
-  const bpm = Tone.Transport.bpm?.value ?? DEFAULT_BPM
+  const bpmFromState = Number.isFinite(bpmValue) ? bpmValue : null
+  const bpmFromTransport =
+    typeof Tone.Transport.bpm?.value === 'number' && Number.isFinite(Tone.Transport.bpm.value)
+      ? Tone.Transport.bpm.value
+      : null
+  const bpm = bpmFromState ?? bpmFromTransport ?? DEFAULT_BPM
   const secondsPerTick = (60 / bpm) / PPQ
   return loopTicks * secondsPerTick
 }

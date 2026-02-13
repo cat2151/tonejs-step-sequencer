@@ -78,16 +78,23 @@ async function recordLoop(nodes: SequencerNodes, group: Group, durationSeconds: 
   }
 
   const durationMs = Math.max(durationSeconds, MIN_DURATION) * 1000
+  const failSafeMs = durationMs + 2000
 
   let blob: Blob | null = null
   try {
     blob = await new Promise<Blob>((resolve) => {
+      const failSafe = window.setTimeout(() => {
+        console.warn('Recorder stop timed out; returning empty blob for auto gain')
+        resolve(new Blob())
+      }, failSafeMs)
       window.setTimeout(async () => {
         try {
           resolve(await recorder.stop())
         } catch (error) {
           console.warn('Failed to stop recorder for auto gain', error)
           resolve(new Blob())
+        } finally {
+          window.clearTimeout(failSafe)
         }
       }, durationMs)
     })
@@ -149,13 +156,13 @@ export function createAutoGainManager(nodes: SequencerNodes) {
     return autoGains
   }
 
-  async function measure(durationSeconds: number) {
+  async function measure(durationSeconds: number): Promise<Record<Group, number>> {
     if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) {
       return autoGains
     }
     if (measurementPromise) {
       queuedDuration = durationSeconds
-      return measurementPromise
+      return measurementPromise.then(() => measure(durationSeconds))
     }
 
     measurementPromise = runMeasurement(durationSeconds)

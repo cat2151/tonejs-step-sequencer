@@ -205,6 +205,7 @@ function setMonitorGain(nodeId: number, gain: number) {
 
 const autoGainManager = createAutoGainManager(nodes)
 let autoGains: Record<Group, number> = { A: 1, B: 1 }
+let autoGainTimeoutId: number | null = null
 
 function resetAutoGains() {
   autoGains = { A: 1, B: 1 }
@@ -236,13 +237,29 @@ function refreshAutoGain() {
   const loopSeconds = getLoopDurationSeconds()
   autoGainManager
     .measure(loopSeconds)
-    .then((gains) => {
+    .then((gains: Record<Group, number>) => {
       autoGains = gains
       applyMixing()
     })
-    .catch((error) => {
+    .catch((error: unknown) => {
       console.warn('Failed to refresh auto gain', error)
     })
+}
+
+function scheduleAutoGainRefresh() {
+  if (autoGainTimeoutId !== null) {
+    window.clearTimeout(autoGainTimeoutId)
+    autoGainTimeoutId = null
+  }
+  if (!player.playing) return
+  const loopSeconds = getLoopDurationSeconds()
+  if (!Number.isFinite(loopSeconds) || loopSeconds <= 0) return
+  autoGainTimeoutId = window.setTimeout(() => {
+    autoGainTimeoutId = null
+    if (player.playing) {
+      refreshAutoGain()
+    }
+  }, loopSeconds * 1000)
 }
 
 function formatErrorDetail(error: unknown) {
@@ -375,6 +392,10 @@ function setStatus(state: 'idle' | 'starting' | 'playing') {
 
 function stopLoop() {
   if (!player.playing) return
+  if (autoGainTimeoutId !== null) {
+    window.clearTimeout(autoGainTimeoutId)
+    autoGainTimeoutId = null
+  }
   player.stop()
   Tone.Transport.stop()
   nodes.disposeAll()
@@ -396,7 +417,7 @@ async function queueSequenceUpdate() {
     try {
       await player.start(ndjson)
       clearNdjsonError('runtime')
-      refreshAutoGain()
+      scheduleAutoGainRefresh()
     } catch (error) {
       setNdjsonError('Failed to apply sequence update', error)
       throw error
@@ -457,7 +478,7 @@ async function startLoop() {
     }
     setStatus('playing')
     visuals.startVisuals()
-    refreshAutoGain()
+    scheduleAutoGainRefresh()
   })()
 
   startingPromise = thisStart
