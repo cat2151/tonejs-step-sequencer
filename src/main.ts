@@ -168,13 +168,36 @@ function updateMixingLabel() {
 
 function setMonitorGain(nodeId: number, gain: number) {
   const node = nodes.get(nodeId)
-  if (!node || !('gain' in node)) return
-  const target = node as { gain?: { setValueAtTime?: (value: number, time: number) => void; value?: number } }
-  if (!target.gain) return
-  if (typeof target.gain.setValueAtTime === 'function') {
-    target.gain.setValueAtTime(gain, Tone.now())
-  } else if (typeof target.gain.value === 'number') {
-    target.gain.value = gain
+  if (!node) {
+    console.warn(`Monitor bus not found for node ID ${nodeId}`)
+    return
+  }
+  if (!(node instanceof Tone.Gain)) {
+    console.warn(`Expected Tone.Gain monitor bus for node ID ${nodeId}, but got:`, node)
+    return
+  }
+
+  const gainParam = node.gain
+  const now = Tone.now()
+  const rampDuration = 0.01
+
+  if (typeof gainParam.cancelScheduledValues === 'function') {
+    gainParam.cancelScheduledValues(now)
+  }
+
+  if (
+    typeof gainParam.setValueAtTime === 'function' &&
+    typeof gainParam.linearRampToValueAtTime === 'function'
+  ) {
+    const currentValue = typeof gainParam.value === 'number' ? gainParam.value : gain
+    gainParam.setValueAtTime(currentValue, now)
+    gainParam.linearRampToValueAtTime(gain, now + rampDuration)
+  } else if (typeof gainParam.setValueAtTime === 'function') {
+    gainParam.setValueAtTime(gain, now)
+  } else if (typeof gainParam.value === 'number') {
+    gainParam.value = gain
+  } else {
+    console.warn(`Monitor bus gain param has an unexpected shape for node ID ${nodeId}:`, gainParam)
   }
 }
 
