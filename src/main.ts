@@ -4,7 +4,14 @@ import './responsive.css'
 import * as Tone from 'tone'
 import { NDJSONStreamingPlayer, SequencerNodes, parseNDJSON, type SequenceEvent } from 'tonejs-json-sequencer'
 import { DEFAULT_BPM, PPQ } from './constants'
-import { buildSequenceFromNotes, getNdjsonSequence, initializeNoteGrid, updateLoopNote, updateNdjsonDisplay } from './noteGrid'
+import {
+  buildSequenceFromNotes,
+  getNdjsonSequence,
+  initializeNoteGrid,
+  randomizeAll,
+  updateLoopNote,
+  updateNdjsonDisplay,
+} from './noteGrid'
 import { initializeTonePresets } from './toneControls'
 import { createVisuals } from './visuals'
 
@@ -24,6 +31,7 @@ if (app) {
       <section class="panel">
         <div class="controls">
           <button id="toggle" type="button" class="primary">Play</button>
+          <button id="random-all" type="button" class="note-grid-button">すべてランダム</button>
           <div class="status">
             <span class="dot dot-idle" id="dot"></span>
             <span id="status-label"></span>
@@ -129,6 +137,7 @@ const ndjsonToggle = document.querySelector<HTMLButtonElement>('#ndjson-toggle')
 const ndjsonContainer = document.querySelector<HTMLDivElement>('#ndjson-container')
 const ndjsonTextarea = document.querySelector<HTMLTextAreaElement>('#ndjson')
 const ndjsonLabel = document.querySelector<HTMLLabelElement>('#ndjson-label')
+const randomAllButton = document.querySelector<HTMLButtonElement>('#random-all')
 
 toggleButton?.focus()
 
@@ -375,4 +384,21 @@ toggleButton?.addEventListener('click', () => {
       setStatus('idle')
     })
   }
+})
+
+randomAllButton?.addEventListener('click', () => {
+  const randomizePromise = randomizeAll(applySequenceChange)
+  if (player.playing) {
+    randomizePromise.catch((error) => {
+      console.error('Failed to randomize all while playing', error)
+    })
+    return
+  }
+  randomizePromise
+    .then(() => startLoop())
+    .catch((error) => {
+      console.error('Failed to randomize all and start loop', error)
+      setStatus('idle')
+      visuals.stopVisuals()
+    })
 })

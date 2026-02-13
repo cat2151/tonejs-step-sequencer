@@ -315,7 +315,7 @@ function scheduleRowNoteInputChange(
   }, 300)
 }
 
-function randomizeRowPitches(onSequenceChange: SequenceChangeHandler) {
+function randomizeRowPitches(onSequenceChange: SequenceChangeHandler, triggerSequenceChange = true) {
   const scaleIntervals = pickScaleIntervals()
   const keyIndex = pickKeyIndex()
 
@@ -346,10 +346,12 @@ function randomizeRowPitches(onSequenceChange: SequenceChangeHandler) {
   applyRowMidis([3, 4, 5], groupBMidis)
 
   updateGridActiveStates()
-  void onSequenceChange()
+  if (triggerSequenceChange) {
+    void onSequenceChange()
+  }
 }
 
-function randomizeGridSelections(onSequenceChange: SequenceChangeHandler) {
+function randomizeGridSelections(onSequenceChange: SequenceChangeHandler, triggerSequenceChange = true) {
   const groupARowMidis = [0, 1, 2].map((row) => noteNameToMidi(rowNoteNames[row]))
   for (let step = 0; step < STEPS; step++) {
     const rowIndex = Math.floor(Math.random() * GROUP_SIZE)
@@ -376,7 +378,15 @@ function randomizeGridSelections(onSequenceChange: SequenceChangeHandler) {
   }
 
   updateGridActiveStates()
-  void onSequenceChange()
+  if (triggerSequenceChange) {
+    void onSequenceChange()
+  }
+}
+
+export function randomizeAll(onSequenceChange: SequenceChangeHandler) {
+  randomizeRowPitches(onSequenceChange, false)
+  randomizeGridSelections(onSequenceChange, false)
+  return onSequenceChange()
 }
 
 function renderNoteGrid(onSequenceChange: SequenceChangeHandler) {
