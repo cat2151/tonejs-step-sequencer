@@ -38,8 +38,12 @@ if (app) {
                 <span class="label">BPM</span>
                 <input id="bpm-input" class="text-input" type="number" inputmode="decimal" min="1" max="300" value="${DEFAULT_BPM}">
               </label>
-              <div>
+              <div class="note-grid-title">
                 <p class="label">Note grid</p>
+                <div class="note-grid-actions">
+                  <button id="random-pitch" type="button" class="note-grid-button">ランダムpitch</button>
+                  <button id="random-grid" type="button" class="note-grid-button">ランダムgrid</button>
+                </div>
               </div>
             </div>
             <div class="note-grid" id="note-grid"></div>

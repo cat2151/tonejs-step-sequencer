@@ -14,6 +14,43 @@
   width: 100%;
 }
 
+.note-grid-title {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.note-grid-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.note-grid-button {
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.06);
+  color: #e7eaf2;
+  border-radius: 9px;
+  padding: 0.35rem 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease, transform 120ms ease;
+}
+
+.note-grid-button:hover {
+  border-color: rgba(124, 242, 194, 0.6);
+  background: rgba(255, 255, 255, 0.12);
+  transform: translateY(-1px);
+}
+
+.note-grid-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .field {
   display: flex;
   flex-direction: column;
@@ -60,6 +97,13 @@
   gap: 0.5rem;
 }
 
+.tone-section-header-main {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
 .tone-toggle {
   border: 1px solid var(--border);
   background: rgba(124, 242, 194, 0.1);
@@ -80,6 +124,10 @@
 .tone-toggle:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+
+.tone-random-button {
+  padding: 0.42rem 0.85rem;
 }
 
 .tone-status {
