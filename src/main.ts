@@ -389,9 +389,7 @@ toggleButton?.addEventListener('click', () => {
 randomAllButton?.addEventListener('click', () => {
   const randomizePromise = randomizeAll(applySequenceChange)
   if (player.playing) {
-    randomizePromise.catch((error) => {
-      console.error('Failed to randomize all while playing', error)
-    })
+    void randomizePromise
     return
   }
   randomizePromise
