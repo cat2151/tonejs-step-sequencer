@@ -82,7 +82,7 @@ h1 {
 
 .visual-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1.68fr) minmax(0, 1fr);
   gap: 1.25rem;
   align-items: start;
 }

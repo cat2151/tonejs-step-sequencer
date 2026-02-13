@@ -170,6 +170,8 @@ export function renderToneControl(group: Group, noteGrid: HTMLDivElement | null,
 
   const header = document.createElement('div')
   header.className = 'tone-section-header'
+  const headerMain = document.createElement('div')
+  headerMain.className = 'tone-section-header-main'
 
   const toggle = document.createElement('button')
   toggle.type = 'button'
@@ -177,11 +179,18 @@ export function renderToneControl(group: Group, noteGrid: HTMLDivElement | null,
   toggle.textContent = `Group ${group} Tone`
   toggle.setAttribute('aria-expanded', 'false')
 
+  const randomizeButton = document.createElement('button')
+  randomizeButton.type = 'button'
+  randomizeButton.className = 'random-button tone-random-button'
+  randomizeButton.textContent = 'ランダム音色'
+
   const status = document.createElement('span')
   status.className = 'tone-status tone-status-ok'
   status.textContent = 'Ready'
 
-  header.appendChild(toggle)
+  headerMain.appendChild(toggle)
+  headerMain.appendChild(randomizeButton)
+  header.appendChild(headerMain)
   header.appendChild(status)
   section.appendChild(header)
 
@@ -236,10 +245,6 @@ export function renderToneControl(group: Group, noteGrid: HTMLDivElement | null,
 
   const randomActions = document.createElement('div')
   randomActions.className = 'random-actions'
-  const randomizeButton = document.createElement('button')
-  randomizeButton.type = 'button'
-  randomizeButton.className = 'random-button'
-  randomizeButton.textContent = 'ランダム音色'
   const randomExportButton = document.createElement('button')
   randomExportButton.type = 'button'
   randomExportButton.className = 'random-button secondary'
@@ -248,9 +253,13 @@ export function renderToneControl(group: Group, noteGrid: HTMLDivElement | null,
   randomImportButton.type = 'button'
   randomImportButton.className = 'random-button secondary'
   randomImportButton.textContent = 'import'
-  randomActions.appendChild(randomizeButton)
+  const randomResetButton = document.createElement('button')
+  randomResetButton.type = 'button'
+  randomResetButton.className = 'random-button secondary'
+  randomResetButton.textContent = 'reset'
   randomActions.appendChild(randomExportButton)
   randomActions.appendChild(randomImportButton)
+  randomActions.appendChild(randomResetButton)
 
   const randomError = document.createElement('div')
   randomError.className = 'random-error'
@@ -371,6 +380,12 @@ export function renderToneControl(group: Group, noteGrid: HTMLDivElement | null,
     }
     mmlTextarea.value = result.mml
     void handleToneMmlChange(group, result.mml, onSequenceChange)
+  })
+  randomResetButton.addEventListener('click', () => {
+    randomTextarea.value = DEFAULT_RANDOM_DEFINITIONS
+    randomStates[group].text = DEFAULT_RANDOM_DEFINITIONS
+    scheduleRandomSave(group, DEFAULT_RANDOM_DEFINITIONS)
+    setRandomError(group, '')
   })
   randomExportButton.addEventListener('click', () => {
     const text = randomTextarea.value || '[]'

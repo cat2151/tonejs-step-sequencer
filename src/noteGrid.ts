@@ -32,6 +32,13 @@ let ndjsonInputTimeout: number | null = null
 const rowNoteInputTimeouts: Array<number | null> = []
 const rowInputs: HTMLInputElement[] = []
 const gridCells: HTMLButtonElement[][] = []
+const KEY_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
+const MINOR_PENTATONIC_INTERVALS = [0, 3, 5, 7, 10]
+const CHROMATIC_INTERVALS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+const GROUP_A_MIN_MIDI = 48
+const GROUP_A_MAX_MIDI = 72
+const GROUP_B_MIN_MIDI = 24
+const GROUP_B_MAX_MIDI = 36
 
 function clampMidi(value: number) {
   if (!Number.isFinite(value)) return DEFAULT_MIDI_NOTE
@@ -88,6 +95,62 @@ function getStepBpm(stepIndex: number) {
 
 function getStepTicks(stepIndex: number) {
   return SIXTEENTH_TICKS * (DEFAULT_BPM / getStepBpm(stepIndex))
+}
+
+function pickScaleIntervals() {
+  return Math.random() < 0.05 ? CHROMATIC_INTERVALS : MINOR_PENTATONIC_INTERVALS
+}
+
+function pickKeyIndex() {
+  return Math.floor(Math.random() * KEY_NAMES.length)
+}
+
+function isNoteInScale(midi: number, keyIndex: number, intervals: number[]) {
+  const interval = ((midi - keyIndex) % 12 + 12) % 12
+  return intervals.includes(interval)
+}
+
+function collectScaleNotes(minMidi: number, maxMidi: number, keyIndex: number, intervals: number[]) {
+  const notes: number[] = []
+  for (let midi = minMidi; midi <= maxMidi; midi++) {
+    if (isNoteInScale(midi, keyIndex, intervals)) {
+      notes.push(midi)
+    }
+  }
+  return notes
+}
+
+function pickUniqueNotes(source: number[], count: number) {
+  const pool = [...source]
+  const picked: number[] = []
+  while (picked.length < count && pool.length) {
+    const index = Math.floor(Math.random() * pool.length)
+    picked.push(pool[index]!)
+    pool.splice(index, 1)
+  }
+  return picked
+}
+
+function findPreviousScaleNote(startMidi: number, keyIndex: number, intervals: number[]) {
+  for (let midi = startMidi - 1; midi >= 0 && midi >= startMidi - 24; midi--) {
+    if (isNoteInScale(midi, keyIndex, intervals)) {
+      return midi
+    }
+  }
+  return startMidi
+}
+
+function applyRowMidis(rowIndices: number[], midiValues: number[]) {
+  rowIndices.forEach((rowIndex, midiIndex) => {
+    const midi = clampMidi(midiValues[midiIndex] ?? midiValues[midiValues.length - 1] ?? DEFAULT_MIDI_NOTE)
+    const noteName = midiToNoteName(midi)
+    rowNoteNames[rowIndex] = noteName
+    if (rowInputs[rowIndex]) {
+      rowInputs[rowIndex].value = noteName
+    }
+    updateNoteNumbersForRow(rowIndex, midi)
+    updateRowCellLabels(rowIndex)
+  })
 }
 
 function buildTimingMap() {
@@ -252,6 +315,70 @@ function scheduleRowNoteInputChange(
   }, 300)
 }
 
+function randomizeRowPitches(onSequenceChange: SequenceChangeHandler) {
+  const scaleIntervals = pickScaleIntervals()
+  const keyIndex = pickKeyIndex()
+
+  const groupAScaleNotes = collectScaleNotes(GROUP_A_MIN_MIDI, GROUP_A_MAX_MIDI, keyIndex, scaleIntervals)
+  const pickedA = pickUniqueNotes(groupAScaleNotes, GROUP_SIZE)
+  while (pickedA.length < GROUP_SIZE && groupAScaleNotes.length) {
+    pickedA.push(groupAScaleNotes[pickedA.length % groupAScaleNotes.length]!)
+  }
+  applyRowMidis([0, 1, 2], pickedA.sort((a, b) => b - a))
+
+  const groupBScaleNotes = collectScaleNotes(GROUP_B_MIN_MIDI, GROUP_B_MAX_MIDI, keyIndex, scaleIntervals)
+  const useRootPattern = Math.random() < 0.5
+  let groupBMidis: number[]
+  if (useRootPattern && groupBScaleNotes.length) {
+    const root = groupBScaleNotes[Math.floor(Math.random() * groupBScaleNotes.length)]!
+    const lower = findPreviousScaleNote(root, keyIndex, scaleIntervals)
+    const octaveUp = clampMidi(root + 12)
+    groupBMidis = [octaveUp, lower, root]
+  } else {
+    const pickedB = pickUniqueNotes(groupBScaleNotes, GROUP_SIZE)
+    while (pickedB.length < GROUP_SIZE && groupBScaleNotes.length) {
+      pickedB.push(groupBScaleNotes[pickedB.length % groupBScaleNotes.length]!)
+    }
+    groupBMidis = pickedB.length
+      ? pickedB.sort((a, b) => b - a)
+      : [noteNameToMidi(rowNoteNames[3]), noteNameToMidi(rowNoteNames[4]), noteNameToMidi(rowNoteNames[5])]
+  }
+  applyRowMidis([3, 4, 5], groupBMidis)
+
+  updateGridActiveStates()
+  void onSequenceChange()
+}
+
+function randomizeGridSelections(onSequenceChange: SequenceChangeHandler) {
+  const groupARowMidis = [0, 1, 2].map((row) => noteNameToMidi(rowNoteNames[row]))
+  for (let step = 0; step < STEPS; step++) {
+    const rowIndex = Math.floor(Math.random() * GROUP_SIZE)
+    selectedRowsA[step] = rowIndex
+    noteNumbersA[step] = groupARowMidis[rowIndex] ?? noteNumbersA[step]
+  }
+
+  const groupBRowMidis = [0, 1, 2].map((row) => noteNameToMidi(rowNoteNames[GROUP_SIZE + row]))
+  const useSparsePattern = Math.random() < 0.5
+  for (let step = 0; step < STEPS; step++) {
+    if (useSparsePattern) {
+      selectedRowsB[step] = GROUP_SIZE + 2
+      noteNumbersB[step] = groupBRowMidis[2] ?? noteNumbersB[step]
+      if (Math.random() < 0.35) {
+        const altIndex = Math.random() < 0.5 ? 0 : 1
+        selectedRowsB[step] = GROUP_SIZE + altIndex
+        noteNumbersB[step] = groupBRowMidis[altIndex] ?? noteNumbersB[step]
+      }
+    } else {
+      const rowIndex = Math.floor(Math.random() * GROUP_SIZE)
+      selectedRowsB[step] = GROUP_SIZE + rowIndex
+      noteNumbersB[step] = groupBRowMidis[rowIndex] ?? noteNumbersB[step]
+    }
+  }
+
+  updateGridActiveStates()
+  void onSequenceChange()
+}
+
 function renderNoteGrid(onSequenceChange: SequenceChangeHandler) {
   if (!noteGrid) return
   const grid = noteGrid
@@ -345,4 +472,10 @@ export function initializeNoteGrid(onSequenceChange: SequenceChangeHandler, onNd
     textarea.addEventListener('input', () => scheduleNdjsonChange(textarea.value, onNdjsonChange))
     textarea.addEventListener('change', () => handleNdjsonChange(textarea.value, onNdjsonChange))
   }
+
+  const randomPitchButton = document.querySelector<HTMLButtonElement>('#random-pitch')
+  randomPitchButton?.addEventListener('click', () => randomizeRowPitches(onSequenceChange))
+
+  const randomGridButton = document.querySelector<HTMLButtonElement>('#random-grid')
+  randomGridButton?.addEventListener('click', () => randomizeGridSelections(onSequenceChange))
 }
