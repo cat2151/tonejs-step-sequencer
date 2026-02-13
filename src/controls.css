@@ -14,7 +14,7 @@
   width: 100%;
 }
 
-.note-grid-header {
+.note-grid-title {
   display: flex;
   align-items: center;
   gap: 0.4rem;
