@@ -6,3 +6,4 @@
 - 大きな変更前に README とデモ挙動（C4 四分音符ループ）を確認すること。
 - cat2151 が提供するライブラリ（例: tonejs-json-sequencer, tonejs-mml-to-json）はタグ/コミット固定せず `main` の最新を使うこと（重大バグ修正を即時取り込むため）。
 - 実装前に package.json にある cat2151 製ライブラリ“すべて”（例: tonejs-json-sequencer, tonejs-mml-to-json）を対象に、`npm update <lib1> <lib2> ...` などでまとめて更新し、`package-lock.json` を最新化して毎日の重要修正を含む最新版を取得してから作業する（lock に古い版が残るとユーザーに既知バグが再発するため）。
+- tonejs-json-sequencer の event に存在しない機能を自前実装することは禁止。必要なら「どの event を追加すべきか」を設計し、tonejs-json-sequencer の coding agent に伝えるためのプロンプトを PR コメントで user に報告すること。
