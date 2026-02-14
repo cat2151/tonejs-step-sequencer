@@ -75,6 +75,24 @@ export const tonePresets: TonePreset[] = [
   },
   "modulationIndex": 10
 }
+@Filter{
+  "type": "lowpass",
+  "frequency": 1200,
+  "rolloff": -12,
+  "Q": 1,
+  "lfo": {
+    "cutoff": {
+      "frequency": 0.2,
+      "min": 400,
+      "max": 2200
+    },
+    "q": {
+      "frequency": 0.25,
+      "min": 0.5,
+      "max": 6
+    }
+  }
+}
 @PingPongDelay{
   "wet": 1,
   "feedback": 0.35,
@@ -128,6 +146,24 @@ o4 l8 cdefgab<c`,
     "type": "sawtooth"
   }
 }
+@Filter{
+  "type": "lowpass",
+  "frequency": 1200,
+  "rolloff": -12,
+  "Q": 1,
+  "lfo": {
+    "cutoff": {
+      "frequency": 0.2,
+      "min": 400,
+      "max": 2200
+    },
+    "q": {
+      "frequency": 0.25,
+      "min": 0.5,
+      "max": 6
+    }
+  }
+}
 @Chebyshev{
   "wet": 1,
   "order": 32,
@@ -156,6 +192,24 @@ o3 l8 c c d d# f f g g`,
     "sustain": 0.4,
     "release": 0.9,
     "releaseCurve": "exponential"
+  }
+}
+@Filter{
+  "type": "lowpass",
+  "frequency": 1200,
+  "rolloff": -12,
+  "Q": 1,
+  "lfo": {
+    "cutoff": {
+      "frequency": 0.2,
+      "min": 400,
+      "max": 2200
+    },
+    "q": {
+      "frequency": 0.25,
+      "min": 0.5,
+      "max": 6
+    }
   }
 }
 @Chorus{

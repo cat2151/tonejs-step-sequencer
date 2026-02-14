@@ -17,6 +17,7 @@ import {
 import { buildAppShell } from './appLayout'
 import { initializeTonePresets, randomizeToneWithRandomPreset } from './toneControls'
 import { createVisuals } from './visuals'
+import { applyFilterLfos, disposeFilterLfos } from './filterLfo'
 
 const nodes = new SequencerNodes()
 const player = new NDJSONStreamingPlayer(Tone, nodes, {
@@ -245,16 +246,17 @@ function previewNdjsonValidation(ndjson: string) {
   }
 }
 
-function applyToneUpdates(ndjson: string) {
-  let events: SequenceEvent[] = []
-  try {
-    events = parseNDJSON(ndjson)
-  } catch (error) {
-    console.warn('Failed to parse NDJSON for tone update', error)
-    setNdjsonError('Failed to parse NDJSON', error)
-    return
-  }
-
+function applyToneUpdates(ndjson: string, parsedEvents?: SequenceEvent[]) {
+  const events = parsedEvents ?? (() => {
+    try {
+      return parseNDJSON(ndjson)
+    } catch (error) {
+      console.warn('Failed to parse NDJSON for tone update', error)
+      setNdjsonError('Failed to parse NDJSON', error)
+      return null
+    }
+  })()
+  if (!events) return
   events.forEach((event) => {
     if (event.eventType !== 'createNode') return
     const node = nodes.get(event.nodeId)
@@ -302,6 +304,7 @@ function stopLoop() {
   }
   player.stop()
   Tone.Transport.stop()
+  disposeFilterLfos()
   nodes.disposeAll()
   setStatus('idle')
   visuals.stopVisuals()
@@ -317,9 +320,19 @@ async function queueSequenceUpdate() {
     }
     if (!player.playing) return
     const ndjson = getNdjsonSequence()
-    applyToneUpdates(ndjson)
+    let events: SequenceEvent[] | null = null
+    try {
+      events = parseNDJSON(ndjson)
+    } catch (error) {
+      setNdjsonError('Failed to parse NDJSON', error)
+      return
+    }
+    applyToneUpdates(ndjson, events)
     try {
       await player.start(ndjson)
+      if (events) {
+        applyFilterLfos(nodes, events)
+      }
       clearNdjsonError('runtime')
       scheduleAutoGainRefresh()
     } catch (error) {
@@ -366,6 +379,13 @@ async function startLoop() {
     setStatus('starting')
     const ndjson = getNdjsonSequence()
     previewNdjsonValidation(ndjson)
+    let events: SequenceEvent[] | null = null
+    try {
+      events = parseNDJSON(ndjson)
+    } catch (error) {
+      setNdjsonError('Failed to parse NDJSON', error)
+      throw error
+    }
     await Tone.start()
     Tone.Transport.stop()
     nodes.disposeAll()
@@ -375,6 +395,9 @@ async function startLoop() {
 
     try {
       await player.start(ndjson)
+      if (events) {
+        applyFilterLfos(nodes, events)
+      }
       clearNdjsonError('runtime')
     } catch (error) {
       setNdjsonError('Failed to start loop', error)
