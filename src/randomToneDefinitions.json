@@ -115,21 +115,21 @@
   {
     "path": "Filter.lfo.cutoff.min",
     "min": 200,
-    "max": 2000
+    "max": 1500
   },
   {
     "path": "Filter.lfo.cutoff.max",
-    "min": 800,
+    "min": 1500,
     "max": 4000
   },
   {
     "path": "Filter.lfo.q.min",
     "min": 0.3,
-    "max": 4
+    "max": 2
   },
   {
     "path": "Filter.lfo.q.max",
-    "min": 2,
+    "min": 2.5,
     "max": 10
   },
   {

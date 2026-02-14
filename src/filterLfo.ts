@@ -32,11 +32,13 @@ function extractFilterLfoConfigs(events: SequenceEvent[]): FilterLfoConfig[] {
     if (typeof nodeId !== 'number') return
     const args = (event as { args?: unknown }).args
     const options = (Array.isArray(args) ? args[0] : args) as Record<string, unknown> | undefined
+    if (!options || typeof options !== 'object') return
+    const rawLfo = (options as { lfo?: unknown }).lfo
+    if (!rawLfo || typeof rawLfo !== 'object') return
     const cutoffBase = isNumber(options?.frequency) ? options?.frequency : 1000
     const qBase = isNumber(options?.Q) ? options?.Q : 1
-    const lfoOptions = (options?.lfo && typeof options.lfo === 'object'
-      ? (options.lfo as Record<string, unknown>)
-      : {}) as Record<string, unknown>
+    const lfoOptions = rawLfo as Record<string, unknown>
+    if (!('cutoff' in lfoOptions) && !('q' in lfoOptions)) return
     const cutoff = parseLfoRange(lfoOptions.cutoff, 0.2, cutoffBase ?? 1000)
     const q = parseLfoRange(lfoOptions.q, 0.25, qBase ?? 1)
     configs.push({ nodeId, cutoff, q })
