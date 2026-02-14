@@ -29,15 +29,32 @@ export function buildAppShell() {
                   <button id="random-grid" type="button" class="note-grid-button">ランダムgrid</button>
                 </div>
               </div>
-            </div>
-            <div class="note-grid" id="note-grid"></div>
           </div>
-          <div class="visual-grid">
-            <div class="visual-group">
-              <p class="visual-label">Group A</p>
-              <canvas id="waveform-a" width="720" height="120" role="img" aria-label="Group A Waveform display"></canvas>
-              <p class="visual-timing" id="waveform-a-time"></p>
-              <canvas id="fft-a" width="720" height="120" role="img" aria-label="Group A FFT display"></canvas>
+          <div class="note-grid" id="note-grid"></div>
+        </div>
+        <div class="visual-grid">
+          <div class="auto-gain-monitor">
+            <p class="visual-label">Auto gain monitor</p>
+            <div class="auto-gain-grid" role="presentation">
+              <span class="auto-gain-cell auto-gain-header"></span>
+              <span class="auto-gain-cell auto-gain-header">Source dB</span>
+              <span class="auto-gain-cell auto-gain-header">Gain</span>
+              <span class="auto-gain-cell auto-gain-header">After gain</span>
+              <span class="auto-gain-cell auto-gain-group">Group A</span>
+              <span class="auto-gain-cell" id="auto-gain-a-source">-- dB</span>
+              <span class="auto-gain-cell" id="auto-gain-a-gain">x1.00</span>
+              <span class="auto-gain-cell" id="auto-gain-a-applied">-- dB</span>
+              <span class="auto-gain-cell auto-gain-group">Group B</span>
+              <span class="auto-gain-cell" id="auto-gain-b-source">-- dB</span>
+              <span class="auto-gain-cell" id="auto-gain-b-gain">x1.00</span>
+              <span class="auto-gain-cell" id="auto-gain-b-applied">-- dB</span>
+            </div>
+          </div>
+          <div class="visual-group">
+            <p class="visual-label">Group A</p>
+            <canvas id="waveform-a" width="720" height="120" role="img" aria-label="Group A Waveform display"></canvas>
+            <p class="visual-timing" id="waveform-a-time"></p>
+            <canvas id="fft-a" width="720" height="120" role="img" aria-label="Group A FFT display"></canvas>
               <p class="visual-timing" id="fft-a-time"></p>
             </div>
             <div class="visual-group">

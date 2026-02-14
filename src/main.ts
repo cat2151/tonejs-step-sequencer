@@ -46,6 +46,12 @@ const ndjsonTextarea = document.querySelector<HTMLTextAreaElement>('#ndjson')
 const ndjsonLabel = document.querySelector<HTMLLabelElement>('#ndjson-label')
 const randomAllButton = document.querySelector<HTMLButtonElement>('#random-all')
 const mixingButton = document.querySelector<HTMLButtonElement>('#mixing')
+const autoGainSourceA = document.querySelector<HTMLSpanElement>('#auto-gain-a-source')
+const autoGainGainA = document.querySelector<HTMLSpanElement>('#auto-gain-a-gain')
+const autoGainAppliedA = document.querySelector<HTMLSpanElement>('#auto-gain-a-applied')
+const autoGainSourceB = document.querySelector<HTMLSpanElement>('#auto-gain-b-source')
+const autoGainGainB = document.querySelector<HTMLSpanElement>('#auto-gain-b-gain')
+const autoGainAppliedB = document.querySelector<HTMLSpanElement>('#auto-gain-b-applied')
 
 toggleButton?.focus()
 
@@ -110,9 +116,82 @@ function setMonitorGain(nodeId: number, gain: number) {
 const autoGainManager = createAutoGainManager(nodes)
 let autoGains: Record<Group, number> = { A: 1, B: 1 }
 let autoGainTimeoutId: number | null = null
+let autoGainDisplayFrameId: number | null = null
+
+const autoGainElements: Record<Group, { source: HTMLElement | null; gain: HTMLElement | null; applied: HTMLElement | null }> =
+  {
+    A: { source: autoGainSourceA, gain: autoGainGainA, applied: autoGainAppliedA },
+    B: { source: autoGainSourceB, gain: autoGainGainB, applied: autoGainAppliedB },
+  }
+
+function formatDbText(value: number | null) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return '-- dB'
+  }
+  return `${value.toFixed(1)} dB`
+}
+
+function formatGainText(value: number | null) {
+  const safeValue = typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 1
+  return `x${safeValue.toFixed(2)}`
+}
+
+function computePostGainDb(sourceDb: number | null, gain: number | null) {
+  if (typeof sourceDb !== 'number' || !Number.isFinite(sourceDb)) {
+    return null
+  }
+  if (typeof gain !== 'number' || !Number.isFinite(gain) || gain <= 0) {
+    return null
+  }
+  return sourceDb + 20 * Math.log10(gain)
+}
+
+function updateAutoGainRow(group: Group, sourceDb: number | null, gain: number | null) {
+  const elements = autoGainElements[group]
+  if (!elements) return
+  const sourceText = formatDbText(sourceDb)
+  if (elements.source && elements.source.textContent !== sourceText) {
+    elements.source.textContent = sourceText
+  }
+  const gainText = formatGainText(gain)
+  if (elements.gain && elements.gain.textContent !== gainText) {
+    elements.gain.textContent = gainText
+  }
+  const appliedText = formatDbText(computePostGainDb(sourceDb, gain))
+  if (elements.applied && elements.applied.textContent !== appliedText) {
+    elements.applied.textContent = appliedText
+  }
+}
+
+function resetAutoGainDisplay() {
+  updateAutoGainRow('A', null, autoGains.A)
+  updateAutoGainRow('B', null, autoGains.B)
+}
+
+function renderAutoGainDisplay() {
+  const snapshots = autoGainManager.getSnapshots()
+  updateAutoGainRow('A', snapshots.A?.loudnessDb ?? null, autoGains.A)
+  updateAutoGainRow('B', snapshots.B?.loudnessDb ?? null, autoGains.B)
+  autoGainDisplayFrameId = window.requestAnimationFrame(renderAutoGainDisplay)
+}
+
+function startAutoGainDisplay() {
+  if (autoGainDisplayFrameId !== null) return
+  autoGainDisplayFrameId = window.requestAnimationFrame(renderAutoGainDisplay)
+}
+
+function stopAutoGainDisplay() {
+  if (autoGainDisplayFrameId !== null) {
+    window.cancelAnimationFrame(autoGainDisplayFrameId)
+    autoGainDisplayFrameId = null
+  }
+  resetAutoGainDisplay()
+}
 
 function resetAutoGains() {
+  autoGainManager.reset()
   autoGains = { A: 1, B: 1 }
+  resetAutoGainDisplay()
 }
 
 function applyMixing() {
@@ -305,6 +384,7 @@ function stopLoop() {
   nodes.disposeAll()
   setStatus('idle')
   visuals.stopVisuals()
+  stopAutoGainDisplay()
 }
 
 async function queueSequenceUpdate() {
@@ -382,6 +462,7 @@ async function startLoop() {
     }
     setStatus('playing')
     visuals.startVisuals()
+    startAutoGainDisplay()
     scheduleAutoGainRefresh()
   })()
 

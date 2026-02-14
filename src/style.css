@@ -312,6 +312,40 @@ pre {
   gap: 0.75rem;
 }
 
+.auto-gain-monitor {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 0.75rem 0.9rem;
+  background: rgba(15, 22, 36, 0.6);
+}
+
+.auto-gain-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) repeat(3, minmax(0, 1.05fr));
+  gap: 0.35rem 0.65rem;
+  align-items: center;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.92rem;
+}
+
+.auto-gain-cell {
+  color: #e7eaf2;
+  white-space: nowrap;
+}
+
+.auto-gain-header {
+  color: var(--muted);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  font-size: 0.78rem;
+}
+
+.auto-gain-group {
+  color: var(--muted);
+  font-weight: 700;
+}
+
 .visual-group {
   display: grid;
   gap: 0.5rem;

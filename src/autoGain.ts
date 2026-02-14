@@ -21,10 +21,18 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value))
 }
 
+function createEmptySnapshot(): LoudnessSnapshot {
+  return { rms: null, peak: null, loudnessDb: null, blob: null }
+}
+
+function createEmptySnapshots(): GroupSnapshots {
+  return { A: createEmptySnapshot(), B: createEmptySnapshot() }
+}
+
 function analyzeAudioBuffer(buffer: AudioBuffer): LoudnessSnapshot {
   const channelCount = buffer.numberOfChannels
   if (channelCount <= 0 || buffer.length <= 0) {
-    return { rms: null, peak: null, loudnessDb: null, blob: null }
+    return createEmptySnapshot()
   }
 
   let sum = 0
@@ -104,7 +112,7 @@ async function recordLoop(nodes: SequencerNodes, group: Group, durationSeconds: 
   }
 
   if (!blob || blob.size <= 0) {
-    return { rms: null, peak: null, loudnessDb: null, blob }
+    return { ...createEmptySnapshot(), blob }
   }
 
   try {
@@ -114,7 +122,7 @@ async function recordLoop(nodes: SequencerNodes, group: Group, durationSeconds: 
     return { ...analysis, blob }
   } catch (error) {
     console.warn('Failed to decode recorded loop for loudness', error)
-    return { rms: null, peak: null, loudnessDb: null, blob }
+    return { ...createEmptySnapshot(), blob }
   }
 }
 
@@ -138,10 +146,7 @@ function computeAutoGains(aRms: number | null, bRms: number | null): Record<Grou
 }
 
 export function createAutoGainManager(nodes: SequencerNodes) {
-  let measurements: GroupSnapshots = {
-    A: { rms: null, peak: null, loudnessDb: null, blob: null },
-    B: { rms: null, peak: null, loudnessDb: null, blob: null },
-  }
+  let measurements: GroupSnapshots = createEmptySnapshots()
   let autoGains: Record<Group, number> = { A: 1, B: 1 }
   let measurementPromise: Promise<Record<Group, number>> | null = null
   let queuedDuration: number | null = null
@@ -188,6 +193,10 @@ export function createAutoGainManager(nodes: SequencerNodes) {
     },
     getSnapshots() {
       return measurements
+    },
+    reset() {
+      measurements = createEmptySnapshots()
+      autoGains = { A: 1, B: 1 }
     },
   }
 }
