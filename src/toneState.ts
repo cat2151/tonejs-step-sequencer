@@ -169,6 +169,78 @@ o3 l8 c c d d# f f g g`,
 }
 o4 l8 c e g c e g<c`,
   },
+  {
+    id: 'synth-autowah',
+    label: 'Synth + AutoWah',
+    mml: `@Synth{
+  "volume": 0,
+  "detune": 0,
+  "portamento": 0,
+  "oscillator": {
+    "partialCount": 0,
+    "partials": [],
+    "phase": 0,
+    "type": "sawtooth"
+  },
+  "envelope": {
+    "attack": 0.08,
+    "attackCurve": "linear",
+    "decay": 0.2,
+    "decayCurve": "exponential",
+    "sustain": 0.4,
+    "release": 0.9,
+    "releaseCurve": "exponential"
+  }
+}
+@AutoWah{
+  "wet": 0.8,
+  "baseFrequency": 80,
+  "octaves": 5,
+  "sensitivity": -20,
+  "Q": 3,
+  "gain": 2,
+  "follower": 0.15
+}
+o4 l8 c e g a g e c`,
+  },
+  {
+    id: 'synth-autofilter',
+    label: 'Synth + AutoFilter',
+    mml: `@Synth{
+  "volume": 0,
+  "detune": 0,
+  "portamento": 0,
+  "oscillator": {
+    "partialCount": 0,
+    "partials": [],
+    "phase": 0,
+    "type": "sawtooth"
+  },
+  "envelope": {
+    "attack": 0.08,
+    "attackCurve": "linear",
+    "decay": 0.2,
+    "decayCurve": "exponential",
+    "sustain": 0.4,
+    "release": 0.9,
+    "releaseCurve": "exponential"
+  }
+}
+@AutoFilter{
+  "wet": 0.6,
+  "frequency": 4,
+  "type": "sine",
+  "depth": 0.8,
+  "baseFrequency": 180,
+  "octaves": 3.5,
+  "filter": {
+    "type": "lowpass",
+    "rolloff": -12,
+    "Q": 1.5
+  }
+}
+o3 l4 c g c g`,
+  },
 ]
 
 export const toneStates: Record<Group, ToneState> = {
