@@ -15,7 +15,7 @@ import {
   updateNdjsonDisplay,
 } from './noteGrid'
 import { buildAppShell } from './appLayout'
-import { initializeTonePresets } from './toneControls'
+import { initializeTonePresets, randomizeToneWithRandomPreset } from './toneControls'
 import { createVisuals } from './visuals'
 
 const nodes = new SequencerNodes()
@@ -413,7 +413,13 @@ toggleButton?.addEventListener('click', () => {
 
 randomAllButton?.addEventListener('click', () => {
   resetMixing()
-  const randomizePromise = randomizeAll(applySequenceChange)
+  const noopSequenceChange = () => Promise.resolve()
+  const randomizePromise = Promise.all([
+    randomizeToneWithRandomPreset('A', noopSequenceChange),
+    randomizeToneWithRandomPreset('B', noopSequenceChange),
+  ])
+    .then(() => randomizeAll(noopSequenceChange))
+    .then(() => applySequenceChange())
   if (player.playing) {
     void randomizePromise
     return

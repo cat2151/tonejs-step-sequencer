@@ -29,6 +29,7 @@ export type ToneControls = {
   randomBody: HTMLDivElement
   randomTextarea: HTMLTextAreaElement
   randomError: HTMLDivElement
+  clearMmlInputTimeout?: () => void
 }
 
 const TONE_EVENT_TYPES = new Set(['createNode', 'connect', 'set'])
