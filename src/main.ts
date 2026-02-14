@@ -413,10 +413,13 @@ toggleButton?.addEventListener('click', () => {
 
 randomAllButton?.addEventListener('click', () => {
   resetMixing()
+  const noopSequenceChange = () => Promise.resolve()
   const randomizePromise = Promise.all([
-    randomizeToneWithRandomPreset('A', applySequenceChange),
-    randomizeToneWithRandomPreset('B', applySequenceChange),
-  ]).then(() => randomizeAll(applySequenceChange))
+    randomizeToneWithRandomPreset('A', noopSequenceChange),
+    randomizeToneWithRandomPreset('B', noopSequenceChange),
+  ])
+    .then(() => randomizeAll(noopSequenceChange))
+    .then(() => applySequenceChange())
   if (player.playing) {
     void randomizePromise
     return

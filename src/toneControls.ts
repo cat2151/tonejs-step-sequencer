@@ -341,6 +341,13 @@ export function renderToneControl(group: Group, noteGrid: HTMLDivElement | null,
   section.appendChild(body)
   noteGrid.appendChild(section)
 
+  let mmlInputTimeout: number | null = null
+  const clearMmlInputTimeout = () => {
+    if (mmlInputTimeout !== null) {
+      window.clearTimeout(mmlInputTimeout)
+      mmlInputTimeout = null
+    }
+  }
   toneControls[group] = {
     toggle,
     body,
@@ -352,14 +359,7 @@ export function renderToneControl(group: Group, noteGrid: HTMLDivElement | null,
     randomBody,
     randomTextarea,
     randomError,
-  }
-
-  let mmlInputTimeout: number | null = null
-  const clearMmlInputTimeout = () => {
-    if (mmlInputTimeout !== null) {
-      window.clearTimeout(mmlInputTimeout)
-      mmlInputTimeout = null
-    }
+    clearMmlInputTimeout,
   }
   toggle.addEventListener('click', () => toggleToneSection(group))
   presetSelect.addEventListener('change', () => {
@@ -447,7 +447,9 @@ export async function randomizeToneWithRandomPreset(
     controls.presetSelect.value = preset.id
   }
   await handleTonePresetChange(group, preset.id, onSequenceChange)
-  return randomizeTone(group, onSequenceChange)
+  const clearMmlInputTimeout =
+    controls?.clearMmlInputTimeout ?? (() => undefined)
+  return randomizeTone(group, onSequenceChange, { clearMmlInputTimeout })
 }
 
 export async function initializeTonePresets(onSequenceChange: SequenceChangeHandler) {
