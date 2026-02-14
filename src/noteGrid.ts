@@ -10,6 +10,17 @@ import {
   STEPS,
   type Group,
 } from './constants'
+import {
+  clampBpm,
+  clampMidi,
+  collectScaleNotes,
+  findPreviousScaleNote,
+  midiToNoteName,
+  noteNameToMidi,
+  pickKeyIndex,
+  pickScaleIntervals,
+  pickUniqueNotes,
+} from './noteGridUtils'
 import { renderToneControl } from './toneControls'
 import { buildFallbackToneConfig, toneStates } from './toneState'
 
@@ -35,38 +46,10 @@ let ndjsonInputTimeout: number | null = null
 const rowNoteInputTimeouts: Array<number | null> = []
 const rowInputs: HTMLInputElement[] = []
 const gridCells: HTMLButtonElement[][] = []
-const KEY_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
-const MINOR_PENTATONIC_INTERVALS = [0, 3, 5, 7, 10]
-const CHROMATIC_INTERVALS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
 const GROUP_A_MIN_MIDI = 48
 const GROUP_A_MAX_MIDI = 72
 const GROUP_B_MIN_MIDI = 24
 const GROUP_B_MAX_MIDI = 36
-
-function clampMidi(value: number) {
-  if (!Number.isFinite(value)) return DEFAULT_MIDI_NOTE
-  return Math.min(127, Math.max(0, Math.round(value)))
-}
-
-function clampBpm(value: number) {
-  if (!Number.isFinite(value)) return DEFAULT_BPM
-  return Math.min(300, Math.max(1, Math.round(value)))
-}
-
-function midiToNoteName(midi: number) {
-  return Tone.Frequency(midi, 'midi').toNote()
-}
-
-function noteNameToMidi(noteName: string, fallbackMidi: number = DEFAULT_MIDI_NOTE) {
-  try {
-    const midi = Tone.Frequency(noteName).toMidi()
-    if (!Number.isFinite(midi)) return clampMidi(fallbackMidi)
-    return clampMidi(midi)
-  } catch (error) {
-    console.warn('Invalid note name; reverting to fallback MIDI note.', noteName, error)
-    return clampMidi(fallbackMidi)
-  }
-}
 
 function rowIndexToGroup(rowIndex: number): Group {
   return rowIndex < GROUP_SIZE ? 'A' : 'B'
@@ -98,49 +81,6 @@ function getStepBpm(stepIndex: number) {
 
 function getStepTicks(stepIndex: number) {
   return SIXTEENTH_TICKS * (DEFAULT_BPM / getStepBpm(stepIndex))
-}
-
-function pickScaleIntervals() {
-  return Math.random() < 0.05 ? CHROMATIC_INTERVALS : MINOR_PENTATONIC_INTERVALS
-}
-
-function pickKeyIndex() {
-  return Math.floor(Math.random() * KEY_NAMES.length)
-}
-
-function isNoteInScale(midi: number, keyIndex: number, intervals: number[]) {
-  const interval = ((midi - keyIndex) % 12 + 12) % 12
-  return intervals.includes(interval)
-}
-
-function collectScaleNotes(minMidi: number, maxMidi: number, keyIndex: number, intervals: number[]) {
-  const notes: number[] = []
-  for (let midi = minMidi; midi <= maxMidi; midi++) {
-    if (isNoteInScale(midi, keyIndex, intervals)) {
-      notes.push(midi)
-    }
-  }
-  return notes
-}
-
-function pickUniqueNotes(source: number[], count: number) {
-  const pool = [...source]
-  const picked: number[] = []
-  while (picked.length < count && pool.length) {
-    const index = Math.floor(Math.random() * pool.length)
-    picked.push(pool[index]!)
-    pool.splice(index, 1)
-  }
-  return picked
-}
-
-function findPreviousScaleNote(startMidi: number, keyIndex: number, intervals: number[]) {
-  for (let midi = startMidi - 1; midi >= 0 && midi >= startMidi - 24; midi--) {
-    if (isNoteInScale(midi, keyIndex, intervals)) {
-      return midi
-    }
-  }
-  return startMidi
 }
 
 function applyRowMidis(rowIndices: number[], midiValues: number[]) {
