@@ -301,9 +301,11 @@ function setStatus(state: 'idle' | 'starting' | 'playing') {
 let stepCursorFrameId: number | null = null
 
 function tickStepCursor() {
-  if (player.playing) {
-    setPlayingStep(getCurrentStep(Tone.Transport.ticks))
+  if (!player.playing) {
+    stepCursorFrameId = null
+    return
   }
+  setPlayingStep(getCurrentStep(Tone.Transport.ticks))
   stepCursorFrameId = window.requestAnimationFrame(tickStepCursor)
 }
 
