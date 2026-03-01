@@ -331,8 +331,14 @@ async function seamlessRestart(ndjson: string) {
   // Clear the player's internal createdNodeIds set so new tone nodes will be recreated
   // by the next player.start() call (via processNewCreateAndConnectEvents).
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const createdNodeIds: Set<number> | undefined = (player as any).playbackState?.createdNodeIds
-  createdNodeIds?.clear()
+  const createdNodeIds: unknown = (player as any).playbackState?.createdNodeIds
+  if (createdNodeIds != null) {
+    if (typeof (createdNodeIds as { clear?: unknown }).clear === 'function') {
+      ;(createdNodeIds as { clear: () => void }).clear()
+    } else {
+      throw new Error('NDJSONStreamingPlayer.playbackState.createdNodeIds is not a Set-like object')
+    }
+  }
 
   // Recreate infrastructure
   visuals.setupMonitorBus()
