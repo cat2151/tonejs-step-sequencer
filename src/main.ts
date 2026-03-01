@@ -324,16 +324,30 @@ async function seamlessRestart(ndjson: string) {
   }
   await new Promise<void>((resolve) => setTimeout(resolve, Math.ceil(FADE_SECONDS * 1000) + FADE_BUFFER_MS))
 
-  // Stop the player (clears internal createdNodeIds so new nodes will be created fresh)
-  player.stop()
+  // Dispose nodes without stopping the player, so that player.start() below will
+  // take the updateEvents() path (not initializePlayback()), preserving the loop position.
   nodes.disposeAll()
+
+  // Clear the player's internal createdNodeIds set so new tone nodes will be recreated
+  // by the next player.start() call (via processNewCreateAndConnectEvents).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const createdNodeIds: unknown = (player as any).playbackState?.createdNodeIds
+  if (createdNodeIds != null) {
+    if (typeof (createdNodeIds as { clear?: unknown }).clear === 'function') {
+      ;(createdNodeIds as { clear: () => void }).clear()
+    } else {
+      throw new Error('NDJSONStreamingPlayer.playbackState.createdNodeIds is not a Set-like object')
+    }
+  }
 
   // Recreate infrastructure
   visuals.setupMonitorBus()
   resetAutoGains()
   applyMixing()
 
-  // Restart with fresh nodes
+  // Update events while keeping the current loop position intact.
+  // Because player.playing is still true, player.start() calls updateEvents()
+  // which preserves startTime and thus does not restart from position 0.
   try {
     await player.start(ndjson)
     scheduleAutoGainRefresh()
@@ -342,6 +356,7 @@ async function seamlessRestart(ndjson: string) {
       window.clearTimeout(autoGainTimeoutId)
       autoGainTimeoutId = null
     }
+    player.stop()
     Tone.Transport.stop()
     nodes.disposeAll()
     setStatus('idle')
