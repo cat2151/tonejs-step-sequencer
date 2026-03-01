@@ -272,6 +272,12 @@ export function getPresetById(id: string) {
   return tonePresets.find((preset) => preset.id === id)
 }
 
+let toneEventsVersion = 0
+
+export function getToneEventsVersion(): number {
+  return toneEventsVersion
+}
+
 export function buildFallbackToneConfig(group: Group) {
   const nodeId = group === 'A' ? GROUP_A_NODE_ID : GROUP_B_NODE_ID
   const monitorNodeId = group === 'A' ? MONITOR_A_NODE_ID : MONITOR_B_NODE_ID
@@ -393,6 +399,7 @@ export async function applyMmlToToneState(group: Group, mmlText: string) {
     toneStates[group].jsonText = JSON.stringify(normalized.events, null, 2)
     toneStates[group].mmlText = mmlText
     toneStates[group].error = ''
+    toneEventsVersion++
   } catch (error) {
     console.error('Failed to convert MML', error)
     toneStates[group].error = 'MML parsing failed; using previous tone.'
@@ -407,6 +414,7 @@ export function applyJsonToToneState(group: Group, jsonText: string) {
     toneStates[group].instrumentNodeId = normalized.instrumentNodeId
     toneStates[group].jsonText = JSON.stringify(normalized.events, null, 2)
     toneStates[group].error = ''
+    toneEventsVersion++
   } catch (error) {
     console.error('Failed to parse tone JSON', error)
     toneStates[group].error = 'JSON parsing failed; using previous tone.'

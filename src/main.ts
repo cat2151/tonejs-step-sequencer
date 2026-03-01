@@ -16,6 +16,7 @@ import {
 } from './noteGrid'
 import { buildAppShell } from './appLayout'
 import { initializeTonePresets, randomizeToneWithRandomPreset } from './toneControls'
+import { getToneEventsVersion } from './toneState'
 import { createVisuals } from './visuals'
 
 const nodes = new SequencerNodes()
@@ -51,6 +52,7 @@ toggleButton?.focus()
 
 let startingPromise: Promise<void> | null = null
 let sequenceUpdatePromise: Promise<void> | null = null
+let lastRestartedToneVersion = -1
 
 const visuals = createVisuals(nodes)
 
@@ -307,6 +309,41 @@ function stopLoop() {
   visuals.stopVisuals()
 }
 
+async function seamlessRestart(ndjson: string) {
+  // Fade out monitor buses to avoid hearing the spurious note during node recreation
+  const now = Tone.now()
+  const FADE_SECONDS = 0.015
+  const FADE_BUFFER_MS = 5 // extra wall-clock buffer after audio fade completes
+  for (const nodeId of [MONITOR_A_NODE_ID, MONITOR_B_NODE_ID]) {
+    const node = nodes.get(nodeId)
+    if (node instanceof Tone.Gain) {
+      node.gain.cancelScheduledValues(now)
+      node.gain.setValueAtTime(node.gain.value, now)
+      node.gain.linearRampToValueAtTime(0, now + FADE_SECONDS)
+    }
+  }
+  await new Promise<void>((resolve) => setTimeout(resolve, Math.ceil(FADE_SECONDS * 1000) + FADE_BUFFER_MS))
+
+  // Stop the player (clears internal createdNodeIds so new nodes will be created fresh)
+  player.stop()
+  nodes.disposeAll()
+
+  // Recreate infrastructure
+  visuals.setupMonitorBus()
+  resetAutoGains()
+  applyMixing()
+
+  // Restart with fresh nodes
+  try {
+    await player.start(ndjson)
+    scheduleAutoGainRefresh()
+  } catch (error) {
+    setStatus('idle')
+    visuals.stopVisuals()
+    throw error
+  }
+}
+
 async function queueSequenceUpdate() {
   const startup = startingPromise
   if (!player.playing && !startup) return
@@ -317,14 +354,26 @@ async function queueSequenceUpdate() {
     }
     if (!player.playing) return
     const ndjson = getNdjsonSequence()
-    applyToneUpdates(ndjson)
-    try {
-      await player.start(ndjson)
-      clearNdjsonError('runtime')
-      scheduleAutoGainRefresh()
-    } catch (error) {
-      setNdjsonError('Failed to apply sequence update', error)
-      throw error
+    const currentToneVersion = getToneEventsVersion()
+    if (currentToneVersion !== lastRestartedToneVersion) {
+      lastRestartedToneVersion = currentToneVersion
+      try {
+        await seamlessRestart(ndjson)
+        clearNdjsonError('runtime')
+      } catch (error) {
+        setNdjsonError('Failed to apply tone update', error)
+        throw error
+      }
+    } else {
+      applyToneUpdates(ndjson)
+      try {
+        await player.start(ndjson)
+        clearNdjsonError('runtime')
+        scheduleAutoGainRefresh()
+      } catch (error) {
+        setNdjsonError('Failed to apply sequence update', error)
+        throw error
+      }
     }
   })
 
@@ -380,6 +429,7 @@ async function startLoop() {
       setNdjsonError('Failed to start loop', error)
       throw error
     }
+    lastRestartedToneVersion = getToneEventsVersion()
     setStatus('playing')
     visuals.startVisuals()
     scheduleAutoGainRefresh()
