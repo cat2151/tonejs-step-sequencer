@@ -38,7 +38,6 @@ const bpmMap = Array.from({ length: STEPS }, () => DEFAULT_BPM)
 let loopTicksCache = 0
 let loopSecondsCache = 0
 let startTicksCache: number[] = []
-let startSecondsCache: number[] = []
 
 let noteGrid: HTMLDivElement | null = null
 let ndjsonElement: HTMLTextAreaElement | null = null
@@ -102,20 +101,14 @@ function applyRowMidis(rowIndices: number[], midiValues: number[]) {
 
 function buildTimingMap() {
   const startTicks: number[] = []
-  const startSeconds: number[] = []
   let tickCursor = 0
-  let secondsCursor = 0
   for (let step = 0; step < STEPS; step++) {
     startTicks.push(Math.round(tickCursor))
-    startSeconds.push(secondsCursor)
-    const stepTicks = getStepTicks(step)
-    tickCursor += stepTicks
-    secondsCursor += ticksToSeconds(stepTicks)
+    tickCursor += getStepTicks(step)
   }
   loopTicksCache = Math.round(tickCursor)
-  loopSecondsCache = secondsCursor
+  loopSecondsCache = ticksToSeconds(loopTicksCache)
   startTicksCache = startTicks
-  startSecondsCache = startSeconds
   return { startTicks, loopTicks: loopTicksCache }
 }
 
@@ -194,14 +187,13 @@ export function getCurrentStep(transportTicks: number): number {
 }
 
 export function getCurrentStepFromSeconds(elapsedSeconds: number): number {
-  if (loopSecondsCache <= 0 || startSecondsCache.length === 0) return 0
-  const pos = elapsedSeconds % loopSecondsCache
-  for (let i = startSecondsCache.length - 1; i >= 0; i--) {
-    if (pos >= (startSecondsCache[i] ?? 0)) {
-      return i
-    }
+  const loopSeconds = getLoopDurationSeconds()
+  if (loopSeconds <= 0 || loopTicksCache <= 0 || startTicksCache.length === 0) {
+    return 0
   }
-  return 0
+  const normalizedSeconds = elapsedSeconds % loopSeconds
+  const posTicks = (normalizedSeconds / loopSeconds) * loopTicksCache
+  return getCurrentStep(posTicks)
 }
 
 export function setPlayingStep(step: number | null): void {
