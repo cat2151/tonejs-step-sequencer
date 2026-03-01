@@ -338,6 +338,12 @@ async function seamlessRestart(ndjson: string) {
     await player.start(ndjson)
     scheduleAutoGainRefresh()
   } catch (error) {
+    if (autoGainTimeoutId !== null) {
+      window.clearTimeout(autoGainTimeoutId)
+      autoGainTimeoutId = null
+    }
+    Tone.Transport.stop()
+    nodes.disposeAll()
     setStatus('idle')
     visuals.stopVisuals()
     throw error
