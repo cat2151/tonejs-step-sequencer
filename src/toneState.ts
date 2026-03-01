@@ -7,7 +7,7 @@ export type TonePreset = {
   label: string
   mml: string
   /** Raw JSON events used when the effect is not yet supported by tonejs-mml-to-json MML parsing. */
-  json?: object[]
+  json?: SequenceEvent[]
 }
 
 export type ToneState = {

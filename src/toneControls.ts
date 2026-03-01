@@ -188,9 +188,12 @@ export async function handleTonePresetChange(group: Group, presetId: string, onS
     controls.mmlTextarea.value = preset.mml
   }
   if (preset.json) {
-    applyJsonToToneState(group, JSON.stringify(preset.json))
-    updateToneControls(group)
-    await onSequenceChange()
+    toneMmlPromises[group] = toneMmlPromises[group].then(async () => {
+      applyJsonToToneState(group, JSON.stringify(preset.json))
+      updateToneControls(group)
+      await onSequenceChange()
+    })
+    await toneMmlPromises[group]
   } else {
     await handleToneMmlChange(group, preset.mml, onSequenceChange)
   }
@@ -485,14 +488,12 @@ export async function initializeTonePresets(onSequenceChange: SequenceChangeHand
     if (preset) {
       toneStates[group].mmlText = preset.mml
     }
-    updateToneControls(group)
     if (preset?.json) {
       applyJsonToToneState(group, JSON.stringify(preset.json))
-      updateToneControls(group)
     } else if (preset?.mml) {
       await applyMmlToToneState(group, preset.mml)
-      updateToneControls(group)
     }
+    updateToneControls(group)
   }
   void onSequenceChange()
 }
