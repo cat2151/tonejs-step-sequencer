@@ -2,10 +2,12 @@ import type { SequenceEvent } from 'tonejs-json-sequencer'
 import { initWasm as initMmlWasm, mml2json } from 'tonejs-mml-to-json'
 import { GROUP_A_NODE_ID, GROUP_B_NODE_ID, MONITOR_A_NODE_ID, MONITOR_B_NODE_ID, MONITOR_NODE_ID, type Group } from './constants'
 
-type TonePreset = {
+export type TonePreset = {
   id: string
   label: string
   mml: string
+  /** Raw JSON events used when the effect is not yet supported by tonejs-mml-to-json MML parsing. */
+  json?: object[]
 }
 
 export type ToneState = {
@@ -33,6 +35,14 @@ export type ToneControls = {
 }
 
 const TONE_EVENT_TYPES = new Set(['createNode', 'connect', 'set'])
+
+const SAWTOOTH_SYNTH_ARGS = {
+  volume: 0,
+  detune: 0,
+  portamento: 0,
+  oscillator: { partialCount: 0, partials: [], phase: 0, type: 'sawtooth' },
+  envelope: { attack: 0.08, attackCurve: 'linear', decay: 0.2, decayCurve: 'exponential', sustain: 0.4, release: 0.9, releaseCurve: 'exponential' },
+}
 
 export const tonePresets: TonePreset[] = [
   {
@@ -202,6 +212,22 @@ o4 l8 c e g c e g<c`,
   "follower": 0.15
 }
 o4 l8 c e g a g e c`,
+    json: [
+      {
+        eventType: 'createNode',
+        nodeId: 0,
+        nodeType: 'Synth',
+        args: SAWTOOTH_SYNTH_ARGS,
+      },
+      {
+        eventType: 'createNode',
+        nodeId: 1,
+        nodeType: 'AutoWah',
+        args: { wet: 0.8, baseFrequency: 80, octaves: 5, sensitivity: -20, Q: 3, gain: 2, follower: 0.15 },
+      },
+      { eventType: 'connect', nodeId: 0, connectTo: 1 },
+      { eventType: 'connect', nodeId: 1, connectTo: 'toDestination' },
+    ],
   },
   {
     id: 'synth-autofilter',
@@ -240,6 +266,22 @@ o4 l8 c e g a g e c`,
   }
 }
 o3 l4 c g c g`,
+    json: [
+      {
+        eventType: 'createNode',
+        nodeId: 0,
+        nodeType: 'Synth',
+        args: SAWTOOTH_SYNTH_ARGS,
+      },
+      {
+        eventType: 'createNode',
+        nodeId: 1,
+        nodeType: 'AutoFilter',
+        args: { wet: 0.6, frequency: 4, type: 'sine', depth: 0.8, baseFrequency: 180, octaves: 3.5, filter: { type: 'lowpass', rolloff: -12, Q: 1.5 } },
+      },
+      { eventType: 'connect', nodeId: 0, connectTo: 1 },
+      { eventType: 'connect', nodeId: 1, connectTo: 'toDestination' },
+    ],
   },
 ]
 
