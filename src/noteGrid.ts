@@ -186,6 +186,16 @@ export function getCurrentStep(transportTicks: number): number {
   return 0
 }
 
+export function getCurrentStepFromSeconds(elapsedSeconds: number): number {
+  const loopSeconds = getLoopDurationSeconds()
+  if (loopSeconds <= 0 || loopTicksCache <= 0 || startTicksCache.length === 0) {
+    return 0
+  }
+  const normalizedSeconds = elapsedSeconds % loopSeconds
+  const posTicks = (normalizedSeconds / loopSeconds) * loopTicksCache
+  return getCurrentStep(posTicks)
+}
+
 export function setPlayingStep(step: number | null): void {
   if (currentPlayingStep === step) return
   if (currentPlayingStep !== null) {

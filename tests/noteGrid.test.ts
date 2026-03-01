@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { DEFAULT_BPM, PPQ, SIXTEENTH_TICKS, STEPS } from '../src/constants'
-import { buildSequenceFromNotes, getCurrentStep, getLoopDurationSeconds, getNdjsonSequence } from '../src/noteGrid'
+import { buildSequenceFromNotes, getCurrentStep, getCurrentStepFromSeconds, getLoopDurationSeconds, getNdjsonSequence } from '../src/noteGrid'
 
 const expectedLoopTicks = Math.round(SIXTEENTH_TICKS * STEPS)
 
@@ -67,5 +67,42 @@ describe('getCurrentStep', () => {
 
   it('wraps around at loopTicks + SIXTEENTH_TICKS (step 1)', () => {
     expect(getCurrentStep(expectedLoopTicks + SIXTEENTH_TICKS)).toBe(1)
+  })
+})
+
+describe('getCurrentStepFromSeconds', () => {
+  beforeEach(() => {
+    buildSequenceFromNotes()
+  })
+
+  const stepSeconds = (SIXTEENTH_TICKS / PPQ) * (60 / DEFAULT_BPM)
+
+  it('returns step 0 at elapsed 0', () => {
+    expect(getCurrentStepFromSeconds(0)).toBe(0)
+  })
+
+  it('returns step 0 just before first step boundary', () => {
+    expect(getCurrentStepFromSeconds(stepSeconds - 0.001)).toBe(0)
+  })
+
+  it('returns step 1 at exact first step boundary', () => {
+    expect(getCurrentStepFromSeconds(stepSeconds)).toBe(1)
+  })
+
+  it('returns step 1 just before second step boundary', () => {
+    expect(getCurrentStepFromSeconds(stepSeconds * 2 - 0.001)).toBe(1)
+  })
+
+  it('returns step 15 (last step) near end of loop', () => {
+    const loopSeconds = getLoopDurationSeconds()
+    expect(getCurrentStepFromSeconds(loopSeconds - 0.001)).toBe(STEPS - 1)
+  })
+
+  it('wraps around at exactly loopDuration (back to step 0)', () => {
+    expect(getCurrentStepFromSeconds(getLoopDurationSeconds())).toBe(0)
+  })
+
+  it('wraps around at loopDuration + stepSeconds (step 1)', () => {
+    expect(getCurrentStepFromSeconds(getLoopDurationSeconds() + stepSeconds)).toBe(1)
   })
 })
