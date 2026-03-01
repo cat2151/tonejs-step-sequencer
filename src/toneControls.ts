@@ -155,7 +155,12 @@ export function updateToneControls(group: Group) {
   ) {
     controls.mmlTextarea.value = toneStates[group].mmlText
   }
-  controls.jsonTextarea.value = toneStates[group].jsonText
+  if (
+    document.activeElement !== controls.jsonTextarea &&
+    controls.jsonTextarea.value !== toneStates[group].jsonText
+  ) {
+    controls.jsonTextarea.value = toneStates[group].jsonText
+  }
   const randomText = loadRandomDefinitions(group)
   if (
     document.activeElement !== controls.randomTextarea &&
@@ -348,6 +353,13 @@ export function renderToneControl(group: Group, noteGrid: HTMLDivElement | null,
       mmlInputTimeout = null
     }
   }
+  let jsonInputTimeout: number | null = null
+  const clearJsonInputTimeout = () => {
+    if (jsonInputTimeout !== null) {
+      window.clearTimeout(jsonInputTimeout)
+      jsonInputTimeout = null
+    }
+  }
   toneControls[group] = {
     toggle,
     body,
@@ -376,7 +388,15 @@ export function renderToneControl(group: Group, noteGrid: HTMLDivElement | null,
     clearMmlInputTimeout()
     void handleToneMmlChange(group, mmlTextarea.value, onSequenceChange)
   })
+  jsonTextarea.addEventListener('input', () => {
+    clearJsonInputTimeout()
+    jsonInputTimeout = window.setTimeout(() => {
+      void handleToneJsonChange(group, jsonTextarea.value, onSequenceChange)
+      jsonInputTimeout = null
+    }, 300)
+  })
   jsonTextarea.addEventListener('change', () => {
+    clearJsonInputTimeout()
     void handleToneJsonChange(group, jsonTextarea.value, onSequenceChange)
   })
   randomToggle.addEventListener('click', () => {
