@@ -13,7 +13,7 @@ import {
   randomizeAll,
   updateLoopNote,
   updateNdjsonDisplay,
-  getCurrentStep,
+  getCurrentStepFromSeconds,
   setPlayingStep,
 } from './noteGrid'
 import { buildAppShell } from './appLayout'
@@ -305,7 +305,13 @@ function tickStepCursor() {
     stepCursorFrameId = null
     return
   }
-  setPlayingStep(getCurrentStep(Tone.Transport.ticks))
+  // Access playbackState via any-cast since it's private in the library's typedefs,
+  // consistent with how createdNodeIds is accessed elsewhere in this file.
+  const startTime = (player as any).playbackState?.startTime as number | undefined
+  if (startTime != null) {
+    const elapsed = Math.max(0, Tone.now() - startTime)
+    setPlayingStep(getCurrentStepFromSeconds(elapsed))
+  }
   stepCursorFrameId = window.requestAnimationFrame(tickStepCursor)
 }
 
