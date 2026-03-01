@@ -37,6 +37,7 @@ let ndjsonSequence = ''
 const bpmMap = Array.from({ length: STEPS }, () => DEFAULT_BPM)
 let loopTicksCache = 0
 let loopSecondsCache = 0
+let startTicksCache: number[] = []
 
 let noteGrid: HTMLDivElement | null = null
 let ndjsonElement: HTMLTextAreaElement | null = null
@@ -46,6 +47,8 @@ let ndjsonInputTimeout: number | null = null
 const rowNoteInputTimeouts: Array<number | null> = []
 const rowInputs: HTMLInputElement[] = []
 const gridCells: HTMLButtonElement[][] = []
+const stepLabels: HTMLSpanElement[] = []
+let currentPlayingStep: number | null = null
 const GROUP_A_MIN_MIDI = 48
 const GROUP_A_MAX_MIDI = 72
 const GROUP_B_MIN_MIDI = 24
@@ -105,6 +108,7 @@ function buildTimingMap() {
   }
   loopTicksCache = Math.round(tickCursor)
   loopSecondsCache = ticksToSeconds(loopTicksCache)
+  startTicksCache = startTicks
   return { startTicks, loopTicks: loopTicksCache }
 }
 
@@ -169,6 +173,35 @@ export function getLoopDurationSeconds() {
     loopSecondsCache = ticksToSeconds(loopTicksCache || buildTimingMap().loopTicks)
   }
   return loopSecondsCache
+}
+
+export function getCurrentStep(transportTicks: number): number {
+  if (loopTicksCache <= 0 || startTicksCache.length === 0) return 0
+  const pos = transportTicks % loopTicksCache
+  for (let i = startTicksCache.length - 1; i >= 0; i--) {
+    if (pos >= (startTicksCache[i] ?? 0)) {
+      return i
+    }
+  }
+  return 0
+}
+
+export function setPlayingStep(step: number | null): void {
+  if (currentPlayingStep === step) return
+  if (currentPlayingStep !== null) {
+    const prev = currentPlayingStep
+    stepLabels[prev]?.classList.remove('playing')
+    gridCells.forEach((cells) => {
+      cells[prev]?.classList.remove('playing')
+    })
+  }
+  currentPlayingStep = step
+  if (step !== null) {
+    stepLabels[step]?.classList.add('playing')
+    gridCells.forEach((cells) => {
+      cells[step]?.classList.add('playing')
+    })
+  }
 }
 
 function updateGridActiveStates() {
@@ -371,6 +404,7 @@ function renderNoteGrid(onSequenceChange: SequenceChangeHandler) {
   grid.innerHTML = ''
   gridCells.length = 0
   rowInputs.length = 0
+  stepLabels.length = 0
 
   const headerRow = document.createElement('div')
   headerRow.className = 'note-grid-row note-grid-header'
@@ -381,6 +415,7 @@ function renderNoteGrid(onSequenceChange: SequenceChangeHandler) {
     const stepLabel = document.createElement('span')
     stepLabel.className = 'note-step-label'
     stepLabel.textContent = `${step + 1}`
+    stepLabels.push(stepLabel)
     headerRow.appendChild(stepLabel)
   }
   grid.appendChild(headerRow)

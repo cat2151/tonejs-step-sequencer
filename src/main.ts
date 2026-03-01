@@ -13,6 +13,8 @@ import {
   randomizeAll,
   updateLoopNote,
   updateNdjsonDisplay,
+  getCurrentStep,
+  setPlayingStep,
 } from './noteGrid'
 import { buildAppShell } from './appLayout'
 import { initializeTonePresets, randomizeToneWithRandomPreset } from './toneControls'
@@ -296,6 +298,31 @@ function setStatus(state: 'idle' | 'starting' | 'playing') {
   }
 }
 
+let stepCursorFrameId: number | null = null
+
+function tickStepCursor() {
+  if (!player.playing) {
+    stepCursorFrameId = null
+    return
+  }
+  setPlayingStep(getCurrentStep(Tone.Transport.ticks))
+  stepCursorFrameId = window.requestAnimationFrame(tickStepCursor)
+}
+
+function startStepCursor() {
+  if (stepCursorFrameId === null) {
+    stepCursorFrameId = window.requestAnimationFrame(tickStepCursor)
+  }
+}
+
+function stopStepCursor() {
+  if (stepCursorFrameId !== null) {
+    window.cancelAnimationFrame(stepCursorFrameId)
+    stepCursorFrameId = null
+  }
+  setPlayingStep(null)
+}
+
 function stopLoop() {
   if (!player.playing) return
   if (autoGainTimeoutId !== null) {
@@ -306,6 +333,7 @@ function stopLoop() {
   Tone.Transport.stop()
   nodes.disposeAll()
   setStatus('idle')
+  stopStepCursor()
   visuals.stopVisuals()
 }
 
@@ -360,6 +388,7 @@ async function seamlessRestart(ndjson: string) {
     Tone.Transport.stop()
     nodes.disposeAll()
     setStatus('idle')
+    stopStepCursor()
     visuals.stopVisuals()
     throw error
   }
@@ -452,6 +481,7 @@ async function startLoop() {
     }
     lastRestartedToneVersion = getToneEventsVersion()
     setStatus('playing')
+    startStepCursor()
     visuals.startVisuals()
     scheduleAutoGainRefresh()
   })()
@@ -462,6 +492,7 @@ async function startLoop() {
   } catch (error) {
     console.error('Failed to start loop', error)
     setStatus('idle')
+    stopStepCursor()
     visuals.stopVisuals()
     throw error
   } finally {
