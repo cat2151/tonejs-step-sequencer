@@ -10,7 +10,8 @@ export function getBpmValue(): number {
 }
 
 export function setBpmValue(value: number) {
-  bpmValue = value
+  const safeValue = Number.isFinite(value) ? value : DEFAULT_BPM
+  bpmValue = clampBpm(safeValue)
 }
 
 let loopTicksCache = 0
