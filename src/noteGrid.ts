@@ -1,12 +1,9 @@
 import * as Tone from 'tone'
 import type { SequenceEvent } from 'tonejs-json-sequencer'
 import {
-  DEFAULT_BPM,
   DEFAULT_MIDI_NOTE,
   DEFAULT_NOTE_ROWS,
   GROUP_SIZE,
-  PPQ,
-  SIXTEENTH_TICKS,
   STEPS,
   type Group,
 } from './constants'
@@ -21,6 +18,17 @@ import {
   pickScaleIntervals,
   pickUniqueNotes,
 } from './noteGridUtils'
+import {
+  bpmMap,
+  buildTimingMap,
+  getBpmValue,
+  setBpmValue,
+} from './noteGridTiming'
+export {
+  getLoopDurationSeconds,
+  getCurrentStep,
+  getCurrentStepFromSeconds,
+} from './noteGridTiming'
 import { renderToneControl } from './toneControls'
 import { buildFallbackToneConfig, toneStates } from './toneState'
 
@@ -32,12 +40,7 @@ const selectedRowsA = Array.from({ length: STEPS }, () => 1)
 const selectedRowsB = Array.from({ length: STEPS }, () => GROUP_SIZE + 1)
 const noteNumbersA = selectedRowsA.map((row) => noteNameToMidi(rowNoteNames[row]))
 const noteNumbersB = selectedRowsB.map((row) => noteNameToMidi(rowNoteNames[row]))
-let bpmValue = DEFAULT_BPM
 let ndjsonSequence = ''
-const bpmMap = Array.from({ length: STEPS }, () => DEFAULT_BPM)
-let loopTicksCache = 0
-let loopSecondsCache = 0
-let startTicksCache: number[] = []
 
 let noteGrid: HTMLDivElement | null = null
 let ndjsonElement: HTMLTextAreaElement | null = null
@@ -78,14 +81,6 @@ export function getGroupMinFrequency(group: Group) {
   return Tone.Frequency(midiValue, 'midi').toFrequency()
 }
 
-function getStepBpm(stepIndex: number) {
-  return clampBpm(bpmMap[stepIndex] ?? DEFAULT_BPM)
-}
-
-function getStepTicks(stepIndex: number) {
-  return SIXTEENTH_TICKS * (DEFAULT_BPM / getStepBpm(stepIndex))
-}
-
 function applyRowMidis(rowIndices: number[], midiValues: number[]) {
   rowIndices.forEach((rowIndex, midiIndex) => {
     const midi = clampMidi(midiValues[midiIndex] ?? midiValues[midiValues.length - 1] ?? DEFAULT_MIDI_NOTE)
@@ -97,30 +92,6 @@ function applyRowMidis(rowIndices: number[], midiValues: number[]) {
     updateNoteNumbersForRow(rowIndex, midi)
     updateRowCellLabels(rowIndex)
   })
-}
-
-function buildTimingMap() {
-  const startTicks: number[] = []
-  let tickCursor = 0
-  for (let step = 0; step < STEPS; step++) {
-    startTicks.push(Math.round(tickCursor))
-    tickCursor += getStepTicks(step)
-  }
-  loopTicksCache = Math.round(tickCursor)
-  loopSecondsCache = ticksToSeconds(loopTicksCache)
-  startTicksCache = startTicks
-  return { startTicks, loopTicks: loopTicksCache }
-}
-
-function ticksToSeconds(loopTicks: number) {
-  const bpmFromState = Number.isFinite(bpmValue) ? bpmValue : null
-  const bpmFromTransport =
-    typeof Tone.Transport.bpm?.value === 'number' && Number.isFinite(Tone.Transport.bpm.value)
-      ? Tone.Transport.bpm.value
-      : null
-  const bpm = bpmFromState ?? bpmFromTransport ?? DEFAULT_BPM
-  const secondsPerTick = (60 / bpm) / PPQ
-  return loopTicks * secondsPerTick
 }
 
 export function buildSequenceFromNotes() {
@@ -168,34 +139,6 @@ export function getNdjsonSequence() {
   return ndjsonSequence
 }
 
-export function getLoopDurationSeconds() {
-  if (!Number.isFinite(loopSecondsCache) || loopSecondsCache <= 0) {
-    loopSecondsCache = ticksToSeconds(loopTicksCache || buildTimingMap().loopTicks)
-  }
-  return loopSecondsCache
-}
-
-export function getCurrentStep(transportTicks: number): number {
-  if (loopTicksCache <= 0 || startTicksCache.length === 0) return 0
-  const pos = transportTicks % loopTicksCache
-  for (let i = startTicksCache.length - 1; i >= 0; i--) {
-    if (pos >= (startTicksCache[i] ?? 0)) {
-      return i
-    }
-  }
-  return 0
-}
-
-export function getCurrentStepFromSeconds(elapsedSeconds: number): number {
-  const loopSeconds = getLoopDurationSeconds()
-  if (loopSeconds <= 0 || loopTicksCache <= 0 || startTicksCache.length === 0) {
-    return 0
-  }
-  const normalizedSeconds = elapsedSeconds % loopSeconds
-  const posTicks = (normalizedSeconds / loopSeconds) * loopTicksCache
-  return getCurrentStep(posTicks)
-}
-
 export function setPlayingStep(step: number | null): void {
   if (currentPlayingStep === step) return
   if (currentPlayingStep !== null) {
@@ -234,7 +177,7 @@ function updateRowCellLabels(rowIndex: number) {
 
 export function updateLoopNote() {
   if (loopNoteElement) {
-    loopNoteElement.textContent = `Loop runs at ${bpmValue} BPM with a 16-step 16n sequence and explicit loop boundary.`
+    loopNoteElement.textContent = `Loop runs at ${getBpmValue()} BPM with a 16-step 16n sequence and explicit loop boundary.`
   }
 }
 
@@ -283,7 +226,7 @@ function handleRowNoteInputChange(rowIndex: number, value: string, onSequenceCha
 function handleBpmInputChange(value: string, onSequenceChange: SequenceChangeHandler) {
   const parsed = Number.parseFloat(value)
   const bpm = clampBpm(parsed)
-  bpmValue = bpm
+  setBpmValue(bpm)
   if (bpmInput) {
     bpmInput.value = `${bpm}`
   }
