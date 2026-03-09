@@ -245,7 +245,7 @@ function setStatus(state: 'idle' | 'starting' | 'playing') {
 let stepCursorFrameId: number | null = null
 
 function formatDb(db: number | null): string {
-  if (db === null || !Number.isFinite(db)) return '---.-dB'
+  if (db === null || !Number.isFinite(db)) return '--'
   return `${db.toFixed(1)}dB`
 }
 
@@ -253,13 +253,15 @@ function formatGain(gain: number): string {
   return `×${gain.toFixed(2)}`
 }
 
+const AUTO_GAIN_GROUP_ELEMENTS: ReadonlyArray<[Group, HTMLElement | null]> = [
+  ['A', autoGainDisplayA],
+  ['B', autoGainDisplayB],
+]
+
 function updateAutoGainDisplay() {
   const snapshots = autoGainManager.getSnapshots()
   const gains = autoGainManager.getAutoGains()
-  for (const [group, el] of [
-    ['A', autoGainDisplayA],
-    ['B', autoGainDisplayB],
-  ] as const) {
+  for (const [group, el] of AUTO_GAIN_GROUP_ELEMENTS) {
     if (!el) continue
     const snap = snapshots[group]
     const gain = gains[group]
