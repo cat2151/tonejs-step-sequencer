@@ -38,6 +38,8 @@ if (app) {
 
 const toggleButton = document.querySelector<HTMLButtonElement>('#toggle')
 const statusLabel = document.querySelector<HTMLSpanElement>('#status-label')
+const autoGainDisplayA = document.querySelector<HTMLElement>('#auto-gain-a')
+const autoGainDisplayB = document.querySelector<HTMLElement>('#auto-gain-b')
 const statusDot = document.querySelector<HTMLSpanElement>('#dot')
 const ndjsonError = document.querySelector<HTMLDivElement>('#ndjson-error')
 const ndjsonErrorLabel = document.querySelector<HTMLSpanElement>('#ndjson-error-label')
@@ -242,6 +244,47 @@ function setStatus(state: 'idle' | 'starting' | 'playing') {
 
 let stepCursorFrameId: number | null = null
 
+function formatDb(db: number | null): string {
+  if (db === null || !Number.isFinite(db)) return '---.-dB'
+  return `${db.toFixed(1)}dB`
+}
+
+function formatGain(gain: number): string {
+  return `×${gain.toFixed(2)}`
+}
+
+function updateAutoGainDisplay() {
+  const snapshots = autoGainManager.getSnapshots()
+  const gains = autoGainManager.getAutoGains()
+  for (const [group, el] of [
+    ['A', autoGainDisplayA],
+    ['B', autoGainDisplayB],
+  ] as const) {
+    if (!el) continue
+    const snap = snapshots[group]
+    const gain = gains[group]
+    const beforeDb = snap.loudnessDb
+    const afterDb =
+      beforeDb !== null && Number.isFinite(beforeDb) && gain > 0
+        ? beforeDb + 20 * Math.log10(gain)
+        : null
+    const text = `before: ${formatDb(beforeDb)} | gain: ${formatGain(gain)} | after: ${formatDb(afterDb)}`
+    if (el.textContent !== text) {
+      el.textContent = text
+    }
+  }
+}
+
+function resetAutoGainDisplay() {
+  const placeholder = '--'
+  if (autoGainDisplayA && autoGainDisplayA.textContent !== placeholder) {
+    autoGainDisplayA.textContent = placeholder
+  }
+  if (autoGainDisplayB && autoGainDisplayB.textContent !== placeholder) {
+    autoGainDisplayB.textContent = placeholder
+  }
+}
+
 function tickStepCursor() {
   if (!player.playing) {
     stepCursorFrameId = null
@@ -254,6 +297,7 @@ function tickStepCursor() {
     const elapsed = Math.max(0, Tone.now() - startTime)
     setPlayingStep(getCurrentStepFromSeconds(elapsed))
   }
+  updateAutoGainDisplay()
   stepCursorFrameId = window.requestAnimationFrame(tickStepCursor)
 }
 
@@ -269,6 +313,7 @@ function stopStepCursor() {
     stepCursorFrameId = null
   }
   setPlayingStep(null)
+  resetAutoGainDisplay()
 }
 
 function stopLoop() {

@@ -35,6 +35,7 @@ export function buildAppShell() {
           <div class="visual-grid">
             <div class="visual-group">
               <p class="visual-label">Group A</p>
+              <p class="visual-timing" id="auto-gain-a">--</p>
               <canvas id="waveform-a" width="720" height="120" role="img" aria-label="Group A Waveform display"></canvas>
               <p class="visual-timing" id="waveform-a-time"></p>
               <canvas id="fft-a" width="720" height="120" role="img" aria-label="Group A FFT display"></canvas>
@@ -42,6 +43,7 @@ export function buildAppShell() {
             </div>
             <div class="visual-group">
               <p class="visual-label">Group B</p>
+              <p class="visual-timing" id="auto-gain-b">--</p>
               <canvas id="waveform-b" width="720" height="120" role="img" aria-label="Group B Waveform display"></canvas>
               <p class="visual-timing" id="waveform-b-time"></p>
               <canvas id="fft-b" width="720" height="120" role="img" aria-label="Group B FFT display"></canvas>
