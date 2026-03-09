@@ -1,6 +1,6 @@
 import type { SequenceEvent } from 'tonejs-json-sequencer'
 import { initWasm as initMmlWasm, mml2json } from 'tonejs-mml-to-json'
-import { GROUP_A_NODE_ID, GROUP_B_NODE_ID, MONITOR_A_NODE_ID, MONITOR_B_NODE_ID, MONITOR_NODE_ID, type Group } from './constants'
+import { GROUP_A_NODE_ID, GROUP_B_NODE_ID, MONITOR_A_NODE_ID, MONITOR_B_NODE_ID, type Group } from './constants'
 
 type TonePreset = {
   id: string
@@ -341,11 +341,9 @@ export function normalizeToneEvents(events: SequenceEvent[], group: Group) {
       const connectTo =
         rawConnectTo === 'toDestination'
           ? monitorNodeId
-          : rawConnectTo === MONITOR_NODE_ID
+          : rawConnectTo === monitorNodeId
             ? monitorNodeId
-            : rawConnectTo === monitorNodeId
-              ? monitorNodeId
-              : mapId(rawConnectTo) ?? monitorNodeId
+            : mapId(rawConnectTo) ?? monitorNodeId
 
       normalized.push({
         ...(event as SequenceEvent),

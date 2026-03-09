@@ -2,7 +2,6 @@ import * as Tone from 'tone'
 
 export type Group = 'A' | 'B'
 
-export const MONITOR_NODE_ID = 1
 export const MONITOR_A_NODE_ID = 10011
 export const MONITOR_B_NODE_ID = 10021
 export const STEPS = 16
