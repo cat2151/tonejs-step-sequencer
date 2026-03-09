@@ -1,18 +1,19 @@
 import { describe, expect, it } from 'vitest'
+import type { SequenceEvent } from 'tonejs-json-sequencer'
 import { MONITOR_A_NODE_ID, GROUP_A_NODE_ID } from '../src/constants'
 import { normalizeToneEvents } from '../src/toneState'
 
 describe('normalizeToneEvents', () => {
   it('connects Instrument → Effect → Monitor in series (not Instrument → Monitor and Effect → Monitor)', () => {
     // These are the events that tonejs-mml-to-json generates for "@FMSynth{} @PingPongDelay{} c"
-    const rawEvents = [
+    const rawEvents: SequenceEvent[] = [
       { eventType: 'createNode', nodeId: 0, nodeType: 'FMSynth' },
       { eventType: 'createNode', nodeId: 1, nodeType: 'PingPongDelay', args: { wet: 1 } },
       { eventType: 'connect', nodeId: 0, connectTo: 1 },
       { eventType: 'connect', nodeId: 1, connectTo: 'toDestination' },
     ]
 
-    const { events } = normalizeToneEvents(rawEvents as never, 'A')
+    const { events } = normalizeToneEvents(rawEvents, 'A')
     const connectEvents = events.filter((e) => (e as { eventType?: string }).eventType === 'connect')
 
     expect(connectEvents).toHaveLength(2)
@@ -32,12 +33,12 @@ describe('normalizeToneEvents', () => {
   })
 
   it('handles direct Instrument → toDestination (no effect)', () => {
-    const rawEvents = [
+    const rawEvents: SequenceEvent[] = [
       { eventType: 'createNode', nodeId: 0, nodeType: 'Synth' },
       { eventType: 'connect', nodeId: 0, connectTo: 'toDestination' },
     ]
 
-    const { events } = normalizeToneEvents(rawEvents as never, 'A')
+    const { events } = normalizeToneEvents(rawEvents, 'A')
     const connectEvents = events.filter((e) => (e as { eventType?: string }).eventType === 'connect')
 
     expect(connectEvents).toHaveLength(1)
@@ -48,14 +49,14 @@ describe('normalizeToneEvents', () => {
   })
 
   it('correctly identifies the instrument node ID', () => {
-    const rawEvents = [
+    const rawEvents: SequenceEvent[] = [
       { eventType: 'createNode', nodeId: 0, nodeType: 'FMSynth' },
       { eventType: 'createNode', nodeId: 1, nodeType: 'PingPongDelay', args: { wet: 1 } },
       { eventType: 'connect', nodeId: 0, connectTo: 1 },
       { eventType: 'connect', nodeId: 1, connectTo: 'toDestination' },
     ]
 
-    const { instrumentNodeId } = normalizeToneEvents(rawEvents as never, 'A')
+    const { instrumentNodeId } = normalizeToneEvents(rawEvents, 'A')
 
     expect(instrumentNodeId).toBe(GROUP_A_NODE_ID)
   })
