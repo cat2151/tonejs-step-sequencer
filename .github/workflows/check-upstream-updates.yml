@@ -1,0 +1,129 @@
+name: Check Upstream Library Updates
+
+on:
+  schedule:
+    # 日本時間 09:00 (UTC 00:00)
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  check-and-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.19.0
+          cache: npm
+
+      - name: Check for upstream updates
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          extract_sha() {
+            local pkg=$1
+            local sha
+            sha=$(node -e "
+              const l = require('./package-lock.json');
+              const entry = l.packages['node_modules/${pkg}'];
+              if (!entry) { process.stderr.write('ERROR: ${pkg} not found in package-lock.json\n'); process.exit(1); }
+              const resolved = entry.resolved || '';
+              const sha = resolved.split('#')[1];
+              if (!sha) { process.stderr.write('ERROR: no SHA found in resolved field for ${pkg}: ' + resolved + '\n'); process.exit(1); }
+              console.log(sha);
+            ")
+            echo "$sha"
+          }
+          SEQUENCER_LOCK_SHA=$(extract_sha tonejs-json-sequencer)
+          MML_LOCK_SHA=$(extract_sha tonejs-mml-to-json)
+
+          SEQUENCER_LATEST_SHA=$(gh api repos/cat2151/tonejs-json-sequencer/commits/main --jq '.sha')
+          MML_LATEST_SHA=$(gh api repos/cat2151/tonejs-mml-to-json/commits/main --jq '.sha')
+
+          echo "tonejs-json-sequencer: lock=${SEQUENCER_LOCK_SHA} latest=${SEQUENCER_LATEST_SHA}"
+          echo "tonejs-mml-to-json:    lock=${MML_LOCK_SHA}       latest=${MML_LATEST_SHA}"
+
+          if [ "${SEQUENCER_LOCK_SHA}" != "${SEQUENCER_LATEST_SHA}" ] || [ "${MML_LOCK_SHA}" != "${MML_LATEST_SHA}" ]; then
+            echo "updated=true" >> "$GITHUB_OUTPUT"
+            echo "sequencer_old=${SEQUENCER_LOCK_SHA}" >> "$GITHUB_OUTPUT"
+            echo "sequencer_new=${SEQUENCER_LATEST_SHA}" >> "$GITHUB_OUTPUT"
+            echo "mml_old=${MML_LOCK_SHA}" >> "$GITHUB_OUTPUT"
+            echo "mml_new=${MML_LATEST_SHA}" >> "$GITHUB_OUTPUT"
+          else
+            echo "updated=false" >> "$GITHUB_OUTPUT"
+            echo "No updates found."
+          fi
+
+      - name: Update dependencies
+        if: steps.check.outputs.updated == 'true'
+        run: npm install
+
+      - name: Build
+        if: steps.check.outputs.updated == 'true'
+        run: npm run build -- --base=./
+
+      - name: Commit and push updated lock file
+        if: steps.check.outputs.updated == 'true'
+        env:
+          SEQUENCER_OLD: ${{ steps.check.outputs.sequencer_old }}
+          SEQUENCER_NEW: ${{ steps.check.outputs.sequencer_new }}
+          MML_OLD: ${{ steps.check.outputs.mml_old }}
+          MML_NEW: ${{ steps.check.outputs.mml_new }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add package-lock.json
+
+          COMMIT_MSG="chore: update cat2151 libraries from upstream"
+          [ "${SEQUENCER_OLD}" != "${SEQUENCER_NEW}" ] && COMMIT_MSG="${COMMIT_MSG}
+          - tonejs-json-sequencer: ${SEQUENCER_OLD} -> ${SEQUENCER_NEW}"
+          [ "${MML_OLD}" != "${MML_NEW}" ] && COMMIT_MSG="${COMMIT_MSG}
+          - tonejs-mml-to-json: ${MML_OLD} -> ${MML_NEW}"
+
+          git diff --cached --quiet || git commit -m "${COMMIT_MSG}"
+          git push
+
+      - name: Upload artifact
+        if: steps.check.outputs.updated == 'true'
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: ./dist
+
+      - name: Deploy to GitHub Pages
+        if: steps.check.outputs.updated == 'true'
+        id: deploy
+        uses: actions/deploy-pages@v4
+
+      - name: Create issue on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue create \
+            --repo "${{ github.repository }}" \
+            --title "CI失敗: Check Upstream Library Updates" \
+            --body-file - << 'EOF'
+          ## CI失敗通知
+          ワークフロー **Check Upstream Library Updates** が失敗しました。
+          - コミット: ${{ github.sha }}
+          - ブランチ: ${{ github.ref_name }}
+          - 実行URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          EOF
