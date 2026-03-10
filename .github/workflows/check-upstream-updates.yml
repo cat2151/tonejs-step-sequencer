@@ -1,0 +1,122 @@
+name: Check Upstream Library Updates
+
+on:
+  schedule:
+    # 日本時間 09:00 (UTC 00:00)
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+
+jobs:
+  check-and-build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    outputs:
+      updated: ${{ steps.check.outputs.updated }}
+      sequencer_old: ${{ steps.check.outputs.sequencer_old }}
+      sequencer_new: ${{ steps.check.outputs.sequencer_new }}
+      mml_old: ${{ steps.check.outputs.mml_old }}
+      mml_new: ${{ steps.check.outputs.mml_new }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.19.0
+          cache: npm
+
+      - name: Check for upstream updates
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python .github/scripts/check_upstream_updates.py
+
+      - name: Update dependencies
+        if: steps.check.outputs.updated == 'true'
+        run: npm install
+
+      - name: Build
+        if: steps.check.outputs.updated == 'true'
+        run: npm run build -- --base=./
+
+      - name: Upload Pages artifact
+        if: steps.check.outputs.updated == 'true'
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: ./dist
+
+      - name: Upload updated package-lock.json
+        if: steps.check.outputs.updated == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-lock
+          path: package-lock.json
+
+  deploy:
+    needs: check-and-build
+    if: needs.check-and-build.outputs.updated == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+
+    permissions:
+      contents: write
+      issues: write
+      pages: write
+      id-token: write
+
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deploy
+        uses: actions/deploy-pages@v4
+
+      - uses: actions/checkout@v4
+
+      - name: Download updated package-lock.json
+        uses: actions/download-artifact@v4
+        with:
+          name: package-lock
+
+      - name: Commit and push updated lock file
+        env:
+          SEQUENCER_OLD: ${{ needs.check-and-build.outputs.sequencer_old }}
+          SEQUENCER_NEW: ${{ needs.check-and-build.outputs.sequencer_new }}
+          MML_OLD: ${{ needs.check-and-build.outputs.mml_old }}
+          MML_NEW: ${{ needs.check-and-build.outputs.mml_new }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add package-lock.json
+
+          COMMIT_MSG="chore: update cat2151 libraries from upstream"
+          [ "${SEQUENCER_OLD}" != "${SEQUENCER_NEW}" ] && COMMIT_MSG="${COMMIT_MSG}
+          - tonejs-json-sequencer: ${SEQUENCER_OLD} -> ${SEQUENCER_NEW}"
+          [ "${MML_OLD}" != "${MML_NEW}" ] && COMMIT_MSG="${COMMIT_MSG}
+          - tonejs-mml-to-json: ${MML_OLD} -> ${MML_NEW}"
+
+          git diff --cached --quiet || git commit -m "${COMMIT_MSG}"
+          git push
+
+      - name: Create issue on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue create \
+            --repo "${{ github.repository }}" \
+            --title "CI失敗: Check Upstream Library Updates" \
+            --body-file - << 'EOF'
+          ## CI失敗通知
+          ワークフロー **Check Upstream Library Updates** が失敗しました。
+          - コミット: ${{ github.sha }}
+          - ブランチ: ${{ github.ref_name }}
+          - 実行URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          EOF
