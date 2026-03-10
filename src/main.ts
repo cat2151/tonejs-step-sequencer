@@ -4,7 +4,7 @@ import './responsive.css'
 import * as Tone from 'tone'
 import { NDJSONStreamingPlayer, SequencerNodes, parseNDJSON, type SequenceEvent } from 'tonejs-json-sequencer'
 import { MONITOR_A_NODE_ID, MONITOR_B_NODE_ID, PPQ, STEPS, type Group } from './constants'
-import { createAutoGainManager } from './autoGain'
+import { createAutoGainManager, MIN_DURATION as AUTO_GAIN_MIN_DURATION } from './autoGain'
 import {
   buildSequenceFromNotes,
   getNdjsonSequence,
@@ -90,12 +90,15 @@ function refreshAutoGain() {
   autoGainManager
     .measure(durationSeconds)
     .then((gains: Record<Group, number>) => {
+      if (!player.playing) return
       setAutoGains(gains)
     })
     .catch((error: unknown) => {
       console.warn('Failed to refresh auto gain', error)
     })
-  scheduleNextAutoGainRefresh()
+    .finally(() => {
+      scheduleNextAutoGainRefresh()
+    })
 }
 
 function scheduleNextAutoGainRefresh() {
@@ -104,7 +107,7 @@ function scheduleNextAutoGainRefresh() {
     autoGainTimeoutId = null
   }
   if (!player.playing) return
-  const intervalSeconds = getAutoGainDuration()
+  const intervalSeconds = Math.max(getAutoGainDuration(), AUTO_GAIN_MIN_DURATION)
   if (!Number.isFinite(intervalSeconds) || intervalSeconds <= 0) return
   autoGainTimeoutId = window.setTimeout(() => {
     autoGainTimeoutId = null
