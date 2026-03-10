@@ -17,6 +17,7 @@ import {
   setPlayingStep,
 } from './noteGrid'
 import { buildAppShell } from './appLayout'
+import { createMixingController } from './mixing'
 import { initializeTonePresets, randomizeToneWithRandomPreset } from './toneControls'
 import { getToneEventsVersion } from './toneState'
 import { createVisuals } from './visuals'
@@ -67,84 +68,9 @@ const { setNdjsonError, clearNdjsonError, toggleNdjsonErrorDetails, toggleNdjson
     { ndjsonToggle, ndjsonContainer },
   )
 
-type MixingMode = { label: string; gains: Record<Group, number> }
-
-const mixingModes: MixingMode[] = [
-  { label: '1:1', gains: { A: 1, B: 1 } },
-  { label: '2:1', gains: { A: 1, B: 0.5 } },
-  { label: '1:2', gains: { A: 0.5, B: 1 } },
-]
-
-let mixingIndex = 0
-
-function updateMixingLabel() {
-  if (!mixingButton) return
-  mixingButton.textContent = `Mixing ${mixingModes[mixingIndex]?.label ?? '1:1'}`
-}
-
-function setMonitorGain(nodeId: number, gain: number) {
-  const node = nodes.get(nodeId)
-  if (!node) {
-    console.warn(`Monitor bus not found for node ID ${nodeId}`)
-    return
-  }
-  if (!(node instanceof Tone.Gain)) {
-    console.warn(`Expected Tone.Gain monitor bus for node ID ${nodeId}, but got:`, node)
-    return
-  }
-
-  const gainParam = node.gain
-  const now = Tone.now()
-  const rampDuration = 0.01
-
-  if (typeof gainParam.cancelScheduledValues === 'function') {
-    gainParam.cancelScheduledValues(now)
-  }
-
-  if (
-    typeof gainParam.setValueAtTime === 'function' &&
-    typeof gainParam.linearRampToValueAtTime === 'function'
-  ) {
-    const currentValue = typeof gainParam.value === 'number' ? gainParam.value : gain
-    gainParam.setValueAtTime(currentValue, now)
-    gainParam.linearRampToValueAtTime(gain, now + rampDuration)
-  } else if (typeof gainParam.setValueAtTime === 'function') {
-    gainParam.setValueAtTime(gain, now)
-  } else if (typeof gainParam.value === 'number') {
-    gainParam.value = gain
-  } else {
-    console.warn(`Monitor bus gain param has an unexpected shape for node ID ${nodeId}:`, gainParam)
-  }
-}
-
 const autoGainManager = createAutoGainManager(nodes)
-let autoGains: Record<Group, number> = { A: 1, B: 1 }
+const { applyMixing, resetAutoGains, setAutoGains, resetMixing } = createMixingController(nodes, mixingButton)
 let autoGainTimeoutId: number | null = null
-
-function resetAutoGains() {
-  autoGains = { A: 1, B: 1 }
-}
-
-function applyMixing() {
-  const mode = mixingModes[mixingIndex] ?? mixingModes[0]
-  setMonitorGain(MONITOR_A_NODE_ID, mode.gains.A * autoGains.A)
-  setMonitorGain(MONITOR_B_NODE_ID, mode.gains.B * autoGains.B)
-}
-
-function resetMixing() {
-  mixingIndex = 0
-  updateMixingLabel()
-  applyMixing()
-}
-
-function cycleMixing() {
-  mixingIndex = (mixingIndex + 1) % mixingModes.length
-  updateMixingLabel()
-  applyMixing()
-}
-
-updateMixingLabel()
-mixingButton?.addEventListener('click', cycleMixing)
 
 function refreshAutoGain() {
   if (!player.playing) return
@@ -152,8 +78,7 @@ function refreshAutoGain() {
   autoGainManager
     .measure(loopSeconds)
     .then((gains: Record<Group, number>) => {
-      autoGains = gains
-      applyMixing()
+      setAutoGains(gains)
     })
     .catch((error: unknown) => {
       console.warn('Failed to refresh auto gain', error)
