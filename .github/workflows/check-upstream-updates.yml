@@ -6,22 +6,18 @@ on:
     - cron: '0 0 * * *'
   workflow_dispatch:
 
-permissions:
-  contents: write
-  issues: write
-  pages: write
-  id-token: write
-
-concurrency:
-  group: pages
-  cancel-in-progress: true
-
 jobs:
-  check-and-deploy:
+  check-and-build:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
+    permissions:
+      contents: read
+
+    outputs:
+      updated: ${{ steps.check.outputs.updated }}
+      sequencer_old: ${{ steps.check.outputs.sequencer_old }}
+      sequencer_new: ${{ steps.check.outputs.sequencer_new }}
+      mml_old: ${{ steps.check.outputs.mml_old }}
+      mml_new: ${{ steps.check.outputs.mml_new }}
 
     steps:
       - uses: actions/checkout@v4
@@ -80,13 +76,55 @@ jobs:
         if: steps.check.outputs.updated == 'true'
         run: npm run build -- --base=./
 
-      - name: Commit and push updated lock file
+      - name: Upload Pages artifact
         if: steps.check.outputs.updated == 'true'
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: ./dist
+
+      - name: Upload updated package-lock.json
+        if: steps.check.outputs.updated == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-lock
+          path: package-lock.json
+
+  deploy:
+    needs: check-and-build
+    if: needs.check-and-build.outputs.updated == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+
+    permissions:
+      contents: write
+      issues: write
+      pages: write
+      id-token: write
+
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deploy
+        uses: actions/deploy-pages@v4
+
+      - uses: actions/checkout@v4
+
+      - name: Download updated package-lock.json
+        uses: actions/download-artifact@v4
+        with:
+          name: package-lock
+
+      - name: Commit and push updated lock file
         env:
-          SEQUENCER_OLD: ${{ steps.check.outputs.sequencer_old }}
-          SEQUENCER_NEW: ${{ steps.check.outputs.sequencer_new }}
-          MML_OLD: ${{ steps.check.outputs.mml_old }}
-          MML_NEW: ${{ steps.check.outputs.mml_new }}
+          SEQUENCER_OLD: ${{ needs.check-and-build.outputs.sequencer_old }}
+          SEQUENCER_NEW: ${{ needs.check-and-build.outputs.sequencer_new }}
+          MML_OLD: ${{ needs.check-and-build.outputs.mml_old }}
+          MML_NEW: ${{ needs.check-and-build.outputs.mml_new }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -100,17 +138,6 @@ jobs:
 
           git diff --cached --quiet || git commit -m "${COMMIT_MSG}"
           git push
-
-      - name: Upload artifact
-        if: steps.check.outputs.updated == 'true'
-        uses: actions/upload-pages-artifact@v4
-        with:
-          path: ./dist
-
-      - name: Deploy to GitHub Pages
-        if: steps.check.outputs.updated == 'true'
-        id: deploy
-        uses: actions/deploy-pages@v4
 
       - name: Create issue on failure
         if: failure()
