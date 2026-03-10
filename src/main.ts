@@ -3,7 +3,7 @@ import './controls.css'
 import './responsive.css'
 import * as Tone from 'tone'
 import { NDJSONStreamingPlayer, SequencerNodes, parseNDJSON, type SequenceEvent } from 'tonejs-json-sequencer'
-import { MONITOR_A_NODE_ID, MONITOR_B_NODE_ID, PPQ, type Group } from './constants'
+import { MONITOR_A_NODE_ID, MONITOR_B_NODE_ID, PPQ, STEPS, type Group } from './constants'
 import { createAutoGainManager } from './autoGain'
 import {
   buildSequenceFromNotes,
@@ -71,34 +71,52 @@ const { setNdjsonError, clearNdjsonError, toggleNdjsonErrorDetails, toggleNdjson
 const autoGainManager = createAutoGainManager(nodes)
 const { applyMixing, resetAutoGains, setAutoGains, resetMixing } = createMixingController(nodes, mixingButton)
 let autoGainTimeoutId: number | null = null
+let autoGainStepsCompleted = 0
+
+function getAutoGainDuration(): number {
+  const loopSeconds = getLoopDurationSeconds()
+  if (autoGainStepsCompleted < STEPS) {
+    return loopSeconds / STEPS
+  }
+  return loopSeconds
+}
 
 function refreshAutoGain() {
   if (!player.playing) return
-  const loopSeconds = getLoopDurationSeconds()
+  const durationSeconds = getAutoGainDuration()
+  if (autoGainStepsCompleted < STEPS) {
+    autoGainStepsCompleted++
+  }
   autoGainManager
-    .measure(loopSeconds)
+    .measure(durationSeconds)
     .then((gains: Record<Group, number>) => {
       setAutoGains(gains)
     })
     .catch((error: unknown) => {
       console.warn('Failed to refresh auto gain', error)
     })
+  scheduleNextAutoGainRefresh()
 }
 
-function scheduleAutoGainRefresh() {
+function scheduleNextAutoGainRefresh() {
   if (autoGainTimeoutId !== null) {
     window.clearTimeout(autoGainTimeoutId)
     autoGainTimeoutId = null
   }
   if (!player.playing) return
-  const loopSeconds = getLoopDurationSeconds()
-  if (!Number.isFinite(loopSeconds) || loopSeconds <= 0) return
+  const intervalSeconds = getAutoGainDuration()
+  if (!Number.isFinite(intervalSeconds) || intervalSeconds <= 0) return
   autoGainTimeoutId = window.setTimeout(() => {
     autoGainTimeoutId = null
     if (player.playing) {
       refreshAutoGain()
     }
-  }, loopSeconds * 1000)
+  }, intervalSeconds * 1000)
+}
+
+function scheduleAutoGainRefresh() {
+  autoGainStepsCompleted = 0
+  scheduleNextAutoGainRefresh()
 }
 
 ndjsonErrorToggle?.addEventListener('click', () => toggleNdjsonErrorDetails())
