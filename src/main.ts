@@ -454,6 +454,20 @@ toggleButton?.addEventListener('click', () => {
   }
 })
 
+document.addEventListener('keydown', (e) => {
+  if ((e.shiftKey || e.ctrlKey) && e.key === 'Enter') {
+    e.preventDefault()
+    if (player.playing) {
+      stopLoop()
+    } else {
+      startLoop().catch((error) => {
+        console.error('Failed to start loop', error)
+        setStatus('idle')
+      })
+    }
+  }
+})
+
 randomAllButton?.addEventListener('click', () => {
   resetMixing()
   const noopSequenceChange = () => Promise.resolve()
