@@ -450,7 +450,13 @@ export function initializeNoteGrid(onSequenceChange: SequenceChangeHandler, onNd
   if (bpmInput) {
     const input = bpmInput
     input.addEventListener('input', () => scheduleBpmInputChange(input.value, onSequenceChange))
-    input.addEventListener('change', () => handleBpmInputChange(input.value, onSequenceChange))
+    input.addEventListener('change', () => {
+      if (bpmInputTimeout !== null) {
+        window.clearTimeout(bpmInputTimeout)
+        bpmInputTimeout = null
+      }
+      handleBpmInputChange(input.value, onSequenceChange)
+    })
   }
 
   if (ndjsonElement) {
