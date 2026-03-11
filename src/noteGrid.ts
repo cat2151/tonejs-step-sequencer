@@ -53,6 +53,9 @@ const rowInputs: HTMLInputElement[] = []
 const gridCells: HTMLButtonElement[][] = []
 const stepLabels: HTMLSpanElement[] = []
 let currentPlayingStep: number | null = null
+let isDragging = false
+let dragRowIndex: number | null = null
+let mouseUpListenerAdded = false
 const GROUP_A_MIN_MIDI = 48
 const GROUP_A_MAX_MIDI = 72
 const GROUP_B_MIN_MIDI = 24
@@ -424,7 +427,17 @@ function renderNoteGrid(onSequenceChange: SequenceChangeHandler) {
       cell.type = 'button'
       cell.className = 'note-cell'
       cell.setAttribute('aria-label', `Step ${step + 1}, row ${rowIndex + 1} (${noteName})`)
-      cell.addEventListener('click', () => handleStepSelection(step, rowIndex, onSequenceChange))
+      cell.addEventListener('mousedown', (e) => {
+        e.preventDefault()
+        isDragging = true
+        dragRowIndex = rowIndex
+        handleStepSelection(step, rowIndex, onSequenceChange)
+      })
+      cell.addEventListener('mouseenter', () => {
+        if (isDragging && dragRowIndex === rowIndex) {
+          handleStepSelection(step, rowIndex, onSequenceChange)
+        }
+      })
       rowElement.appendChild(cell)
       cells.push(cell)
     }
@@ -441,6 +454,14 @@ export function initializeNoteGrid(onSequenceChange: SequenceChangeHandler, onNd
   ndjsonElement = document.querySelector<HTMLTextAreaElement>('#ndjson')
   loopNoteElement = document.querySelector<HTMLParagraphElement>('#loop-note')
   bpmInput = document.querySelector<HTMLInputElement>('#bpm-input')
+
+  if (!mouseUpListenerAdded) {
+    mouseUpListenerAdded = true
+    document.addEventListener('mouseup', () => {
+      isDragging = false
+      dragRowIndex = null
+    })
+  }
 
   renderNoteGrid(onSequenceChange)
   buildSequenceFromNotes()
