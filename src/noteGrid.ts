@@ -55,6 +55,7 @@ const stepLabels: HTMLSpanElement[] = []
 let currentPlayingStep: number | null = null
 let isDragging = false
 let dragRowIndex: number | null = null
+let pendingChangeHandler: SequenceChangeHandler | null = null
 let mouseUpListenerAdded = false
 const GROUP_A_MIN_MIDI = 48
 const GROUP_A_MAX_MIDI = 72
@@ -202,13 +203,17 @@ function updateNoteNumbersForRow(rowIndex: number, midiValue: number) {
   })
 }
 
-function handleStepSelection(stepIndex: number, rowIndex: number, onSequenceChange: SequenceChangeHandler) {
+function applyStepState(stepIndex: number, rowIndex: number) {
   const group = rowIndexToGroup(rowIndex)
   const selections = getSelections(group)
   const notes = getNoteNumbers(group)
   selections[stepIndex] = rowIndex
   notes[stepIndex] = noteNameToMidi(rowNoteNames[rowIndex])
   updateGridActiveStates()
+}
+
+function handleStepSelection(stepIndex: number, rowIndex: number, onSequenceChange: SequenceChangeHandler) {
+  applyStepState(stepIndex, rowIndex)
   void onSequenceChange()
 }
 
@@ -428,13 +433,20 @@ function renderNoteGrid(onSequenceChange: SequenceChangeHandler) {
       cell.className = 'note-cell'
       cell.setAttribute('aria-label', `Step ${step + 1}, row ${rowIndex + 1} (${noteName})`)
       cell.addEventListener('mousedown', (e) => {
-        e.preventDefault()
+        if (e.button !== 0) return
         isDragging = true
         dragRowIndex = rowIndex
-        handleStepSelection(step, rowIndex, onSequenceChange)
+        pendingChangeHandler = onSequenceChange
+        applyStepState(step, rowIndex)
       })
-      cell.addEventListener('mouseenter', () => {
-        if (isDragging && dragRowIndex === rowIndex) {
+      cell.addEventListener('mouseenter', (e) => {
+        if (isDragging && dragRowIndex === rowIndex && (e.buttons & 1) !== 0) {
+          applyStepState(step, rowIndex)
+        }
+      })
+      cell.addEventListener('click', (e) => {
+        // detail === 0 means keyboard activation (Enter/Space); mouse clicks have detail >= 1
+        if (e.detail === 0) {
           handleStepSelection(step, rowIndex, onSequenceChange)
         }
       })
@@ -458,6 +470,10 @@ export function initializeNoteGrid(onSequenceChange: SequenceChangeHandler, onNd
   if (!mouseUpListenerAdded) {
     mouseUpListenerAdded = true
     document.addEventListener('mouseup', () => {
+      if (isDragging && pendingChangeHandler) {
+        void pendingChangeHandler()
+        pendingChangeHandler = null
+      }
       isDragging = false
       dragRowIndex = null
     })
