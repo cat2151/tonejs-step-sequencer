@@ -12,7 +12,7 @@ export type LoudnessSnapshot = {
 type GroupSnapshots = Record<Group, LoudnessSnapshot>
 
 const MIN_RMS = 1e-6
-const MIN_DURATION = 0.1
+export const MIN_DURATION = 0.1
 const MIN_AUTO_GAIN = 0.1
 const MAX_AUTO_GAIN = 4
 const TARGET_RMS_CAP = 0.35
