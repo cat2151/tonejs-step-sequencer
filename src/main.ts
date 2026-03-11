@@ -443,7 +443,7 @@ async function startLoop() {
   }
 }
 
-toggleButton?.addEventListener('click', () => {
+function togglePlayStop() {
   if (player.playing) {
     stopLoop()
   } else {
@@ -452,19 +452,26 @@ toggleButton?.addEventListener('click', () => {
       setStatus('idle')
     })
   }
+}
+
+toggleButton?.addEventListener('click', () => {
+  togglePlayStop()
 })
 
 document.addEventListener('keydown', (e) => {
+  if (e.repeat) return
+  const target = e.target as HTMLElement | null
+  if (
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLTextAreaElement ||
+    target instanceof HTMLSelectElement ||
+    target?.isContentEditable
+  ) {
+    return
+  }
   if ((e.shiftKey || e.ctrlKey) && e.key === 'Enter') {
     e.preventDefault()
-    if (player.playing) {
-      stopLoop()
-    } else {
-      startLoop().catch((error) => {
-        console.error('Failed to start loop', error)
-        setStatus('idle')
-      })
-    }
+    togglePlayStop()
   }
 })
 
