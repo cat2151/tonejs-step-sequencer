@@ -47,6 +47,7 @@ let ndjsonElement: HTMLTextAreaElement | null = null
 let loopNoteElement: HTMLParagraphElement | null = null
 let bpmInput: HTMLInputElement | null = null
 let ndjsonInputTimeout: number | null = null
+let bpmInputTimeout: number | null = null
 const rowNoteInputTimeouts: Array<number | null> = []
 const rowInputs: HTMLInputElement[] = []
 const gridCells: HTMLButtonElement[][] = []
@@ -238,6 +239,16 @@ function handleBpmInputChange(value: string, onSequenceChange: SequenceChangeHan
 function handleNdjsonChange(value: string, onNdjsonChange: NdjsonChangeHandler) {
   ndjsonSequence = value
   void onNdjsonChange()
+}
+
+function scheduleBpmInputChange(value: string, onSequenceChange: SequenceChangeHandler) {
+  if (bpmInputTimeout !== null) {
+    window.clearTimeout(bpmInputTimeout)
+  }
+  bpmInputTimeout = window.setTimeout(() => {
+    bpmInputTimeout = null
+    handleBpmInputChange(value, onSequenceChange)
+  }, 1500)
 }
 
 function scheduleNdjsonChange(text: string, onNdjsonChange: NdjsonChangeHandler) {
@@ -438,6 +449,7 @@ export function initializeNoteGrid(onSequenceChange: SequenceChangeHandler, onNd
 
   if (bpmInput) {
     const input = bpmInput
+    input.addEventListener('input', () => scheduleBpmInputChange(input.value, onSequenceChange))
     input.addEventListener('change', () => handleBpmInputChange(input.value, onSequenceChange))
   }
 
