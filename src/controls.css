@@ -286,6 +286,43 @@
   text-align: center;
   font-size: 0.8rem;
   color: var(--muted);
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1.2;
+}
+
+.note-step-label:hover {
+  color: rgba(124, 242, 194, 0.8);
+}
+
+.note-step-label:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 2px rgba(124, 242, 194, 0.25);
+  border-radius: 4px;
+}
+
+.note-step-label.rest {
+  color: #ff9c9c;
+}
+
+.note-step-label.rest::after {
+  content: 'R';
+  font-size: 0.6rem;
+  line-height: 1;
+}
+
+.note-step-label.tie {
+  color: rgba(93, 187, 255, 0.9);
+}
+
+.note-step-label.tie::after {
+  content: '~';
+  font-size: 0.75rem;
+  line-height: 1;
 }
 
 .note-cell {

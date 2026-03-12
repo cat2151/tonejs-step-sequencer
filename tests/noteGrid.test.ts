@@ -1,11 +1,20 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { DEFAULT_BPM, PPQ, SIXTEENTH_TICKS, STEPS } from '../src/constants'
-import { buildSequenceFromNotes, getCurrentStep, getCurrentStepFromSeconds, getLoopDurationSeconds, getNdjsonSequence } from '../src/noteGrid'
+import {
+  buildSequenceFromNotes,
+  getCurrentStep,
+  getCurrentStepFromSeconds,
+  getLoopDurationSeconds,
+  getNdjsonSequence,
+  resetStepStates,
+  setStepState,
+} from '../src/noteGrid'
 
 const expectedLoopTicks = Math.round(SIXTEENTH_TICKS * STEPS)
 
 describe('noteGrid sequencing', () => {
   beforeEach(() => {
+    resetStepStates()
     buildSequenceFromNotes()
   })
 
@@ -36,8 +45,98 @@ describe('noteGrid sequencing', () => {
   })
 })
 
+describe('noteGrid rest/tie states', () => {
+  beforeEach(() => {
+    resetStepStates()
+  })
+
+  it('skips trigger events for rest steps', () => {
+    setStepState(0, 'rest')
+    buildSequenceFromNotes()
+    const events = getNdjsonSequence()
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line) as { eventType?: string; args?: unknown[] })
+    const triggerEvents = events.filter((event) => event.eventType === 'triggerAttackRelease')
+    expect(triggerEvents).toHaveLength((STEPS - 1) * 2)
+  })
+
+  it('skips trigger events for tie steps', () => {
+    setStepState(1, 'tie')
+    buildSequenceFromNotes()
+    const events = getNdjsonSequence()
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line) as { eventType?: string; args?: unknown[] })
+    const triggerEvents = events.filter((event) => event.eventType === 'triggerAttackRelease')
+    expect(triggerEvents).toHaveLength((STEPS - 1) * 2)
+  })
+
+  it('extends note duration to cover tied steps', () => {
+    setStepState(1, 'tie')
+    buildSequenceFromNotes()
+    const events = getNdjsonSequence()
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line) as { eventType?: string; args?: unknown[] })
+    const triggerEvents = events.filter((event) => event.eventType === 'triggerAttackRelease')
+    // Step 0 now covers 2 sixteenth notes (steps 0 and 1)
+    const step0Events = triggerEvents.filter((e) => {
+      const args = e.args as string[]
+      return args[2] === `+0i`
+    })
+    expect(step0Events.length).toBe(2)
+    expect(step0Events[0]?.args?.[1]).toBe(`${SIXTEENTH_TICKS * 2}i`)
+  })
+
+  it('uses single-step tick duration when no ties follow', () => {
+    buildSequenceFromNotes()
+    const events = getNdjsonSequence()
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line) as { eventType?: string; args?: unknown[] })
+    const triggerEvents = events.filter((event) => event.eventType === 'triggerAttackRelease')
+    // All steps are 'note' with no ties, so each has SIXTEENTH_TICKS duration
+    expect(triggerEvents[0]?.args?.[1]).toBe(`${SIXTEENTH_TICKS}i`)
+  })
+
+  it('skips multiple consecutive rest steps', () => {
+    setStepState(2, 'rest')
+    setStepState(5, 'rest')
+    setStepState(10, 'rest')
+    buildSequenceFromNotes()
+    const events = getNdjsonSequence()
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line) as { eventType?: string; args?: unknown[] })
+    const triggerEvents = events.filter((event) => event.eventType === 'triggerAttackRelease')
+    expect(triggerEvents).toHaveLength((STEPS - 3) * 2)
+  })
+
+  it('extends duration across multiple consecutive ties', () => {
+    setStepState(3, 'tie')
+    setStepState(4, 'tie')
+    buildSequenceFromNotes()
+    const events = getNdjsonSequence()
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line) as { eventType?: string; args?: unknown[] })
+    const triggerEvents = events.filter((event) => event.eventType === 'triggerAttackRelease')
+    // Steps 3 and 4 are ties, so step 2 covers 3 sixteenth notes
+    expect(triggerEvents).toHaveLength((STEPS - 2) * 2)
+    const step2StartTicks = SIXTEENTH_TICKS * 2
+    const step2Events = triggerEvents.filter((e) => {
+      const args = e.args as string[]
+      return args[2] === `+${step2StartTicks}i`
+    })
+    expect(step2Events.length).toBe(2)
+    expect(step2Events[0]?.args?.[1]).toBe(`${SIXTEENTH_TICKS * 3}i`)
+  })
+})
+
 describe('getCurrentStep', () => {
   beforeEach(() => {
+    resetStepStates()
     buildSequenceFromNotes()
   })
 
@@ -72,6 +171,7 @@ describe('getCurrentStep', () => {
 
 describe('getCurrentStepFromSeconds', () => {
   beforeEach(() => {
+    resetStepStates()
     buildSequenceFromNotes()
   })
 
