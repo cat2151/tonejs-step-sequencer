@@ -4,6 +4,7 @@ import {
   DEFAULT_MIDI_NOTE,
   DEFAULT_NOTE_ROWS,
   GROUP_SIZE,
+  SIXTEENTH_TICKS,
   STEPS,
   type Group,
 } from './constants'
@@ -34,6 +35,20 @@ import { buildFallbackToneConfig, toneStates } from './toneState'
 
 type SequenceChangeHandler = () => Promise<void>
 type NdjsonChangeHandler = () => Promise<void>
+
+export type StepState = 'note' | 'rest' | 'tie'
+
+const stepStates: StepState[] = Array.from({ length: STEPS }, () => 'note' as StepState)
+
+export function setStepState(step: number, state: StepState) {
+  if (step >= 0 && step < STEPS) {
+    stepStates[step] = state
+  }
+}
+
+export function resetStepStates() {
+  stepStates.fill('note')
+}
 
 const rowNoteNames: string[] = [...DEFAULT_NOTE_ROWS]
 const selectedRowsA = Array.from({ length: STEPS }, () => 1)
@@ -99,6 +114,15 @@ function applyRowMidis(rowIndices: number[], midiValues: number[]) {
   })
 }
 
+function computeNoteDurationTicks(startStep: number): number {
+  let tieCount = 0
+  for (let i = startStep + 1; i < STEPS; i++) {
+    if (stepStates[i] === 'tie') tieCount++
+    else break
+  }
+  return SIXTEENTH_TICKS * (1 + tieCount)
+}
+
 export function buildSequenceFromNotes() {
   const { startTicks, loopTicks } = buildTimingMap()
   const toneA = toneStates.A.events.length ? toneStates.A : buildFallbackToneConfig('A')
@@ -107,16 +131,18 @@ export function buildSequenceFromNotes() {
   const groupBNodeId = toneB.instrumentNodeId
   const noteEvents: SequenceEvent[] = []
   for (let step = 0; step < STEPS; step++) {
+    if (stepStates[step] === 'rest' || stepStates[step] === 'tie') continue
+    const durationTicks = computeNoteDurationTicks(step)
     noteEvents.push(
       {
         eventType: 'triggerAttackRelease',
         nodeId: groupANodeId,
-        args: [midiToNoteName(noteNumbersA[step]), '16n', `+${startTicks[step]}i`],
+        args: [midiToNoteName(noteNumbersA[step]), `${durationTicks}i`, `+${startTicks[step]}i`],
       },
       {
         eventType: 'triggerAttackRelease',
         nodeId: groupBNodeId,
-        args: [midiToNoteName(noteNumbersB[step]), '16n', `+${startTicks[step]}i`],
+        args: [midiToNoteName(noteNumbersB[step]), `${durationTicks}i`, `+${startTicks[step]}i`],
       },
     )
   }
@@ -160,6 +186,22 @@ export function setPlayingStep(step: number | null): void {
       cells[step]?.classList.add('playing')
     })
   }
+}
+
+function updateStepLabelStates() {
+  stepLabels.forEach((label, step) => {
+    const state = stepStates[step]
+    label.classList.toggle('rest', state === 'rest')
+    label.classList.toggle('tie', state === 'tie')
+    label.setAttribute('aria-label', `Step ${step + 1}: ${state} (click to cycle)`)
+  })
+}
+
+function cycleStepState(step: number, onSequenceChange: SequenceChangeHandler) {
+  const current = stepStates[step]
+  stepStates[step] = current === 'note' ? 'rest' : current === 'rest' ? 'tie' : 'note'
+  updateStepLabelStates()
+  void onSequenceChange()
 }
 
 function updateGridActiveStates() {
@@ -325,6 +367,41 @@ function randomizeRowPitches(
   }
 }
 
+function randomizeStepStates() {
+  stepStates.fill('note')
+  for (let step = 0; step < STEPS; step++) {
+    const r = Math.random()
+    if (r < 0.2) {
+      stepStates[step] = 'rest'
+    } else if (r < 0.4) {
+      // Tie is valid only if previous step is not a rest (and not the first step)
+      if (step > 0 && stepStates[step - 1] !== 'rest') {
+        stepStates[step] = 'tie'
+      }
+    }
+  }
+}
+
+function postProcessGroupAStates() {
+  const maxIterations = STEPS * 2
+  let iterations = 0
+  let changed = true
+  while (changed && iterations < maxIterations) {
+    changed = false
+    iterations++
+    for (let step = 0; step < STEPS - 1; step++) {
+      if (
+        stepStates[step] === 'note' &&
+        stepStates[step + 1] === 'note' &&
+        noteNumbersA[step] === noteNumbersA[step + 1]
+      ) {
+        stepStates[step + 1] = Math.random() < 0.5 ? 'tie' : 'rest'
+        changed = true
+      }
+    }
+  }
+}
+
 function randomizeGridSelections(
   onSequenceChange: SequenceChangeHandler,
   triggerSequenceChange = true,
@@ -355,8 +432,13 @@ function randomizeGridSelections(
     }
   }
 
+  // Randomize step states after grid selections are set (noteNumbersA is updated above)
+  randomizeStepStates()
+  postProcessGroupAStates()
+
   if (updateActiveState) {
     updateGridActiveStates()
+    updateStepLabelStates()
   }
   if (triggerSequenceChange) {
     void onSequenceChange()
@@ -367,6 +449,7 @@ export function randomizeAll(onSequenceChange: SequenceChangeHandler) {
   randomizeRowPitches(onSequenceChange, false, false)
   randomizeGridSelections(onSequenceChange, false, false)
   updateGridActiveStates()
+  updateStepLabelStates()
   return onSequenceChange()
 }
 
@@ -387,6 +470,17 @@ function renderNoteGrid(onSequenceChange: SequenceChangeHandler) {
     const stepLabel = document.createElement('span')
     stepLabel.className = 'note-step-label'
     stepLabel.textContent = `${step + 1}`
+    stepLabel.setAttribute('role', 'button')
+    stepLabel.setAttribute('tabindex', '0')
+    stepLabel.setAttribute('title', 'Click to cycle: note / rest / tie')
+    stepLabel.setAttribute('aria-label', `Step ${step + 1}: note (click to cycle)`)
+    stepLabel.addEventListener('click', () => cycleStepState(step, onSequenceChange))
+    stepLabel.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault()
+        cycleStepState(step, onSequenceChange)
+      }
+    })
     stepLabels.push(stepLabel)
     headerRow.appendChild(stepLabel)
   }
@@ -459,6 +553,7 @@ function renderNoteGrid(onSequenceChange: SequenceChangeHandler) {
   })
 
   updateGridActiveStates()
+  updateStepLabelStates()
 }
 
 export function initializeNoteGrid(onSequenceChange: SequenceChangeHandler, onNdjsonChange: NdjsonChangeHandler) {
