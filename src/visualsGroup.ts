@@ -376,12 +376,14 @@ export function drawGroupVisuals(
   for (const freq of freqLabels) {
     if (freq >= nyquist) continue
     const x = (freq / nyquist) * fftWidth
+    const markerX = Math.round(x)
     const label = freq >= 1000 ? `${freq / 1000}k` : `${freq}Hz`
     const labelWidth = fftCtx.measureText(label).width
-    const labelLeft = Math.max(x - labelWidth / 2, 0)
+    const maxLabelLeft = Math.max(fftWidth - labelWidth, 0)
+    const labelLeft = Math.min(Math.max(x - labelWidth / 2, 0), maxLabelLeft)
     if (labelLeft < lastLabelRightEdge + minLabelGap) continue
     fftCtx.fillStyle = 'rgba(93, 187, 255, 0.6)'
-    fftCtx.fillRect(x, 0, 1, fftHeight)
+    fftCtx.fillRect(markerX, 0, 1, fftHeight)
     fftCtx.fillStyle = 'rgba(93, 187, 255, 0.85)'
     fftCtx.fillText(label, labelLeft, fftHeight - 2)
     lastLabelRightEdge = labelLeft + labelWidth
