@@ -26,14 +26,13 @@ import { renderToneControl } from './toneControls'
 import { buildFallbackToneConfig, toneStates } from './toneState'
 import {
   getNoteNumbers,
+  getSelections,
   gridCells,
   noteNumbersA,
   noteNumbersB,
   rowInputs,
   rowNoteNames,
   rowIndexToGroup,
-  selectedRowsA,
-  selectedRowsB,
   stepLabels,
   stepStates,
   updateGridActiveStates,
@@ -167,7 +166,7 @@ export function updateNdjsonDisplay() {
 
 function applyStepState(stepIndex: number, rowIndex: number) {
   const group = rowIndexToGroup(rowIndex)
-  const selections = group === 'A' ? selectedRowsA : selectedRowsB
+  const selections = getSelections(group)
   const notes = getNoteNumbers(group)
   selections[stepIndex] = rowIndex
   notes[stepIndex] = noteNameToMidi(rowNoteNames[rowIndex])
