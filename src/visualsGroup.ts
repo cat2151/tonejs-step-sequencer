@@ -365,6 +365,28 @@ export function drawGroupVisuals(
     fftCtx.fillRect(x, y, barWidth - 1, barHeight)
   })
 
+  const sampleRate = Tone.getContext().sampleRate || 44100
+  const nyquist = sampleRate / 2
+  const freqLabels = [500, 1000, 2000, 4000, 8000, 16000]
+  const labelFontSize = 10
+  fftCtx.font = `${labelFontSize}px "JetBrains Mono", monospace`
+  fftCtx.textBaseline = 'bottom'
+  const minLabelGap = 4
+  let lastLabelRightEdge = -Infinity
+  for (const freq of freqLabels) {
+    if (freq >= nyquist) continue
+    const x = (freq / nyquist) * fftWidth
+    const label = freq >= 1000 ? `${freq / 1000}k` : `${freq}Hz`
+    const labelWidth = fftCtx.measureText(label).width
+    const labelLeft = Math.max(x - labelWidth / 2, 0)
+    if (labelLeft < lastLabelRightEdge + minLabelGap) continue
+    fftCtx.fillStyle = 'rgba(93, 187, 255, 0.6)'
+    fftCtx.fillRect(x, 0, 1, fftHeight)
+    fftCtx.fillStyle = 'rgba(93, 187, 255, 0.85)'
+    fftCtx.fillText(label, labelLeft, fftHeight - 2)
+    lastLabelRightEdge = labelLeft + labelWidth
+  }
+
   const fftMs = performance.now() - fftStart
 
   return { waveformMs, fftMs }
