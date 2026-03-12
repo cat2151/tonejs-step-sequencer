@@ -4,7 +4,6 @@ import {
   DEFAULT_MIDI_NOTE,
   DEFAULT_NOTE_ROWS,
   GROUP_SIZE,
-  SIXTEENTH_TICKS,
   STEPS,
   type Group,
 } from './constants'
@@ -114,13 +113,14 @@ function applyRowMidis(rowIndices: number[], midiValues: number[]) {
   })
 }
 
-function computeNoteDurationTicks(startStep: number): number {
-  let tieCount = 0
+function computeNoteDurationTicks(startStep: number, startTicks: number[], loopTicks: number): number {
   for (let i = startStep + 1; i < STEPS; i++) {
-    if (stepStates[i] === 'tie') tieCount++
-    else break
+    if (stepStates[i] !== 'tie') {
+      return (startTicks[i] ?? 0) - (startTicks[startStep] ?? 0)
+    }
   }
-  return SIXTEENTH_TICKS * (1 + tieCount)
+  // Ties run to the end of the loop
+  return loopTicks - (startTicks[startStep] ?? 0)
 }
 
 export function buildSequenceFromNotes() {
@@ -132,7 +132,7 @@ export function buildSequenceFromNotes() {
   const noteEvents: SequenceEvent[] = []
   for (let step = 0; step < STEPS; step++) {
     if (stepStates[step] === 'rest' || stepStates[step] === 'tie') continue
-    const durationTicks = computeNoteDurationTicks(step)
+    const durationTicks = computeNoteDurationTicks(step, startTicks, loopTicks)
     noteEvents.push(
       {
         eventType: 'triggerAttackRelease',
