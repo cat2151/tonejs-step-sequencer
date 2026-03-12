@@ -190,9 +190,9 @@ function setStatus(state: 'idle' | 'starting' | 'playing') {
 
 let stepCursorFrameId: number | null = null
 
-function formatDb(db: number | null): string {
-  if (db === null || !Number.isFinite(db)) return '--'
-  return `${db.toFixed(1)}dB`
+function formatLufs(lufs: number | null): string {
+  if (lufs === null || !Number.isFinite(lufs)) return '--'
+  return `${lufs.toFixed(1)} LUFS`
 }
 
 function formatGain(gain: number): string {
@@ -211,12 +211,12 @@ function updateAutoGainDisplay() {
     if (!el) continue
     const snap = snapshots[group]
     const gain = gains[group]
-    const beforeDb = snap.loudnessDb
-    const afterDb =
-      beforeDb !== null && Number.isFinite(beforeDb) && gain > 0
-        ? beforeDb + 20 * Math.log10(gain)
+    const beforeLufs = snap.lufs
+    const afterLufs =
+      beforeLufs !== null && Number.isFinite(beforeLufs) && gain > 0
+        ? beforeLufs + 20 * Math.log10(gain)
         : null
-    const text = `before: ${formatDb(beforeDb)} | gain: ${formatGain(gain)} | after: ${formatDb(afterDb)}`
+    const text = `before: ${formatLufs(beforeLufs)} | gain: ${formatGain(gain)} | after: ${formatLufs(afterLufs)}`
     if (el.textContent !== text) {
       el.textContent = text
     }
