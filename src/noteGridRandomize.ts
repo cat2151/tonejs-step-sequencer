@@ -68,13 +68,15 @@ export function randomizeRowPitches(
   const scaleIntervals = pickScaleIntervals()
   const keyIndex = pickKeyIndex()
 
+  const groupARows = Array.from({ length: GROUP_SIZE }, (_, i) => i)
   const groupAScaleNotes = collectScaleNotes(GROUP_A_MIN_MIDI, GROUP_A_MAX_MIDI, keyIndex, scaleIntervals)
   const pickedA = pickUniqueNotes(groupAScaleNotes, GROUP_SIZE)
   while (pickedA.length < GROUP_SIZE && groupAScaleNotes.length) {
     pickedA.push(groupAScaleNotes[pickedA.length % groupAScaleNotes.length]!)
   }
-  applyRowMidis([0, 1, 2], pickedA.sort((a, b) => b - a))
+  applyRowMidis(groupARows, pickedA.sort((a, b) => b - a))
 
+  const groupBRows = Array.from({ length: GROUP_SIZE }, (_, i) => GROUP_SIZE + i)
   const groupBScaleNotes = collectScaleNotes(GROUP_B_MIN_MIDI, GROUP_B_MAX_MIDI, keyIndex, scaleIntervals)
   const useRootPattern = Math.random() < 0.5
   let groupBMidis: number[]
@@ -90,9 +92,9 @@ export function randomizeRowPitches(
     }
     groupBMidis = pickedB.length
       ? pickedB.sort((a, b) => b - a)
-      : [noteNameToMidi(rowNoteNames[3]), noteNameToMidi(rowNoteNames[4]), noteNameToMidi(rowNoteNames[5])]
+      : groupBRows.map((row) => noteNameToMidi(rowNoteNames[row]))
   }
-  applyRowMidis([3, 4, 5], groupBMidis)
+  applyRowMidis(groupBRows, groupBMidis)
 
   if (updateActiveState) {
     updateGridActiveStates()
@@ -107,14 +109,14 @@ export function randomizeGridSelections(
   triggerSequenceChange = true,
   updateActiveState = true,
 ) {
-  const groupARowMidis = [0, 1, 2].map((row) => noteNameToMidi(rowNoteNames[row]))
+  const groupARowMidis = Array.from({ length: GROUP_SIZE }, (_, i) => noteNameToMidi(rowNoteNames[i]))
   for (let step = 0; step < STEPS; step++) {
     const rowIndex = Math.floor(Math.random() * GROUP_SIZE)
     selectedRowsA[step] = rowIndex
     noteNumbersA[step] = groupARowMidis[rowIndex] ?? noteNumbersA[step]
   }
 
-  const groupBRowMidis = [0, 1, 2].map((row) => noteNameToMidi(rowNoteNames[GROUP_SIZE + row]))
+  const groupBRowMidis = Array.from({ length: GROUP_SIZE }, (_, i) => noteNameToMidi(rowNoteNames[GROUP_SIZE + i]))
   const useSparsePattern = Math.random() < 0.5
   for (let step = 0; step < STEPS; step++) {
     if (useSparsePattern) {

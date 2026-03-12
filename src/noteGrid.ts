@@ -39,6 +39,7 @@ import {
   updateNoteNumbersForRow,
   updateRowCellLabels,
   updateStepLabelStates,
+  type SequenceChangeHandler,
 } from './noteGridState'
 export { setStepState, resetStepStates, type StepState } from './noteGridState'
 import {
@@ -47,7 +48,6 @@ import {
   randomizeRowPitches,
 } from './noteGridRandomize'
 
-type SequenceChangeHandler = () => Promise<void>
 type NdjsonChangeHandler = () => Promise<void>
 
 let ndjsonSequence = ''
