@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { computeKWeightingCoeffs, applyBiquad } from '../src/autoGain'
+import { computeKWeightingCoeffs, applyBiquad } from '../src/lufs'
 
 // ITU-R BS.1770-4 reference coefficients for 48 kHz (from the standard)
 // Stage 1 (high-shelf pre-filter): reference uses the same normalization as our implementation
@@ -69,7 +69,7 @@ describe('computeKWeightingCoeffs', () => {
 })
 
 describe('applyBiquad', () => {
-  it('passes an impulse through a unity-gain all-pass (b=[1,0,0], a=[0,0]) unchanged', () => {
+  it('passes an impulse through a unity-gain pass-through biquad (b=[1,0,0], a=[0,0]) unchanged', () => {
     const passThrough = { b0: 1, b1: 0, b2: 0, a1: 0, a2: 0 }
     const input = new Float32Array([1, 0, 0, 0, 0, 0, 0, 0])
     const output = applyBiquad(input, passThrough)
