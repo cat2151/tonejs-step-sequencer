@@ -1,7 +1,5 @@
 import type { Group } from './constants'
-import type { createAutoGainManager } from './autoGain'
-
-type AutoGainManager = ReturnType<typeof createAutoGainManager>
+import type { AutoGainManager } from './autoGain'
 
 function formatLufs(lufs: number | null): string {
   if (lufs === null || !Number.isFinite(lufs)) return '--'
