@@ -174,6 +174,8 @@ function computeAutoGains(aLufs: number | null, bLufs: number | null): Record<Gr
   return { A: normalize(aLufs), B: normalize(bLufs) }
 }
 
+export type AutoGainManager = ReturnType<typeof createAutoGainManager>
+
 export function createAutoGainManager(nodes: SequencerNodes) {
   let measurements: GroupSnapshots = {
     A: { lufs: null, peak: null, blob: null },

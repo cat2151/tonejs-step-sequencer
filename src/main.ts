@@ -5,6 +5,7 @@ import * as Tone from 'tone'
 import { NDJSONStreamingPlayer, SequencerNodes, parseNDJSON, type SequenceEvent } from 'tonejs-json-sequencer'
 import { MONITOR_A_NODE_ID, MONITOR_B_NODE_ID, PPQ, STEPS, type Group } from './constants'
 import { createAutoGainManager, MIN_DURATION as AUTO_GAIN_MIN_DURATION } from './autoGain'
+import { createAutoGainDisplay } from './autoGainDisplay'
 import {
   buildSequenceFromNotes,
   getNdjsonSequence,
@@ -77,6 +78,7 @@ const { setNdjsonError, clearNdjsonError, toggleNdjsonErrorDetails, toggleNdjson
   )
 
 const autoGainManager = createAutoGainManager(nodes)
+const autoGainDisplay = createAutoGainDisplay(autoGainManager, autoGainDisplayA, autoGainDisplayB)
 const { applyMixing, resetAutoGains, setAutoGains, resetMixing } = createMixingController(nodes, mixingButton)
 let autoGainTimeoutId: number | null = null
 let autoGainStepsCompleted = 0
@@ -198,49 +200,6 @@ function setStatus(state: 'idle' | 'starting' | 'playing') {
 
 let stepCursorFrameId: number | null = null
 
-function formatLufs(lufs: number | null): string {
-  if (lufs === null || !Number.isFinite(lufs)) return '--'
-  return `${lufs.toFixed(1)} LUFS`
-}
-
-function formatGain(gain: number): string {
-  return `×${gain.toFixed(2)}`
-}
-
-const AUTO_GAIN_GROUP_ELEMENTS: ReadonlyArray<[Group, HTMLElement | null]> = [
-  ['A', autoGainDisplayA],
-  ['B', autoGainDisplayB],
-]
-
-function updateAutoGainDisplay() {
-  const snapshots = autoGainManager.getSnapshots()
-  const gains = autoGainManager.getAutoGains()
-  for (const [group, el] of AUTO_GAIN_GROUP_ELEMENTS) {
-    if (!el) continue
-    const snap = snapshots[group]
-    const gain = gains[group]
-    const beforeLufs = snap.lufs
-    const afterLufs =
-      beforeLufs !== null && Number.isFinite(beforeLufs) && gain > 0
-        ? beforeLufs + 20 * Math.log10(gain)
-        : null
-    const text = `before: ${formatLufs(beforeLufs)} | gain: ${formatGain(gain)} | after: ${formatLufs(afterLufs)}`
-    if (el.textContent !== text) {
-      el.textContent = text
-    }
-  }
-}
-
-function resetAutoGainDisplay() {
-  const placeholder = '--'
-  if (autoGainDisplayA && autoGainDisplayA.textContent !== placeholder) {
-    autoGainDisplayA.textContent = placeholder
-  }
-  if (autoGainDisplayB && autoGainDisplayB.textContent !== placeholder) {
-    autoGainDisplayB.textContent = placeholder
-  }
-}
-
 function tickStepCursor() {
   if (!player.playing) {
     stepCursorFrameId = null
@@ -250,7 +209,7 @@ function tickStepCursor() {
   if (elapsed !== null) {
     setPlayingStep(getCurrentStepFromSeconds(elapsed))
   }
-  updateAutoGainDisplay()
+  autoGainDisplay.update()
   stepCursorFrameId = window.requestAnimationFrame(tickStepCursor)
 }
 
@@ -266,7 +225,7 @@ function stopStepCursor() {
     stepCursorFrameId = null
   }
   setPlayingStep(null)
-  resetAutoGainDisplay()
+  autoGainDisplay.reset()
 }
 
 function stopLoop() {
