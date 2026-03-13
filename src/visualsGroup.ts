@@ -57,10 +57,10 @@ export function resetWaveformGains(state: WaveformState) {
   state.gains.B.framesSincePeak = 0
 }
 
-function calculateCycleSamples(group: Group, step: number) {
-  const frequency = Math.max(getStepFrequency(group, step), 1)
+function calculateCycleSamples(frequency: number) {
+  const safeFrequency = Math.max(frequency, 1)
   const sampleRate = Tone.getContext().sampleRate || 44100
-  return Math.max(Math.round(sampleRate / frequency), 1)
+  return Math.max(Math.round(sampleRate / safeFrequency), 1)
 }
 
 function calculateWaveformBufferSize(windowLength: number) {
@@ -246,7 +246,8 @@ export function drawGroupVisuals(
   currentStep: number,
 ): { waveformMs: number; fftMs: number } {
   const waveformStart = performance.now()
-  const cycleLength = calculateCycleSamples(group, currentStep)
+  const stepFreq = getStepFrequency(group, currentStep)
+  const cycleLength = calculateCycleSamples(stepFreq)
   const targetWindowLength = calculateWindowSamples(cycleLength)
   ensureWaveformBuffer(waveformAnalyser, targetWindowLength)
   const latestFrame = waveformAnalyser.getValue() as Float32Array
@@ -349,7 +350,6 @@ export function drawGroupVisuals(
 
   const sampleRateVal = Tone.getContext().sampleRate || 44100
   const lagMs = (waveformAnalyser.size / sampleRateVal) * 1000
-  const stepFreq = getStepFrequency(group, currentStep)
   waveformCtx.fillStyle = 'rgba(124, 242, 194, 0.6)'
   waveformCtx.font = '10px "JetBrains Mono", monospace'
   waveformCtx.textBaseline = 'bottom'
