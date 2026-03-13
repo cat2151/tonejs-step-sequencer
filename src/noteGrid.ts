@@ -2,21 +2,14 @@ import * as Tone from 'tone'
 import type { SequenceEvent } from 'tonejs-json-sequencer'
 import {
   DEFAULT_MIDI_NOTE,
-  DEFAULT_NOTE_ROWS,
   GROUP_SIZE,
   STEPS,
   type Group,
 } from './constants'
 import {
   clampBpm,
-  clampMidi,
-  collectScaleNotes,
-  findPreviousScaleNote,
   midiToNoteName,
   noteNameToMidi,
-  pickKeyIndex,
-  pickScaleIntervals,
-  pickUniqueNotes,
 } from './noteGridUtils'
 import {
   bpmMap,
@@ -31,29 +24,32 @@ export {
 } from './noteGridTiming'
 import { renderToneControl } from './toneControls'
 import { buildFallbackToneConfig, toneStates } from './toneState'
+import {
+  getNoteNumbers,
+  getSelections,
+  gridCells,
+  noteNumbersA,
+  noteNumbersB,
+  rowInputs,
+  rowNoteNames,
+  rowIndexToGroup,
+  stepLabels,
+  stepStates,
+  updateGridActiveStates,
+  updateNoteNumbersForRow,
+  updateRowCellLabels,
+  updateStepLabelStates,
+  type SequenceChangeHandler,
+} from './noteGridState'
+export { setStepState, resetStepStates, type StepState } from './noteGridState'
+import {
+  randomizeAll as _randomizeAll,
+  randomizeGridSelections,
+  randomizeRowPitches,
+} from './noteGridRandomize'
 
-type SequenceChangeHandler = () => Promise<void>
 type NdjsonChangeHandler = () => Promise<void>
 
-export type StepState = 'note' | 'rest' | 'tie'
-
-const stepStates: StepState[] = Array.from({ length: STEPS }, () => 'note' as StepState)
-
-export function setStepState(step: number, state: StepState) {
-  if (step >= 0 && step < STEPS) {
-    stepStates[step] = state
-  }
-}
-
-export function resetStepStates() {
-  stepStates.fill('note')
-}
-
-const rowNoteNames: string[] = [...DEFAULT_NOTE_ROWS]
-const selectedRowsA = Array.from({ length: STEPS }, () => 1)
-const selectedRowsB = Array.from({ length: STEPS }, () => GROUP_SIZE + 1)
-const noteNumbersA = selectedRowsA.map((row) => noteNameToMidi(rowNoteNames[row]))
-const noteNumbersB = selectedRowsB.map((row) => noteNameToMidi(rowNoteNames[row]))
 let ndjsonSequence = ''
 
 let noteGrid: HTMLDivElement | null = null
@@ -63,30 +59,11 @@ let bpmInput: HTMLInputElement | null = null
 let ndjsonInputTimeout: number | null = null
 let bpmInputTimeout: number | null = null
 const rowNoteInputTimeouts: Array<number | null> = []
-const rowInputs: HTMLInputElement[] = []
-const gridCells: HTMLButtonElement[][] = []
-const stepLabels: HTMLSpanElement[] = []
 let currentPlayingStep: number | null = null
 let isDragging = false
 let dragRowIndex: number | null = null
 let pendingChangeHandler: SequenceChangeHandler | null = null
 let mouseUpListenerAdded = false
-const GROUP_A_MIN_MIDI = 48
-const GROUP_A_MAX_MIDI = 72
-const GROUP_B_MIN_MIDI = 24
-const GROUP_B_MAX_MIDI = 36
-
-function rowIndexToGroup(rowIndex: number): Group {
-  return rowIndex < GROUP_SIZE ? 'A' : 'B'
-}
-
-function getSelections(group: Group) {
-  return group === 'A' ? selectedRowsA : selectedRowsB
-}
-
-function getNoteNumbers(group: Group) {
-  return group === 'A' ? noteNumbersA : noteNumbersB
-}
 
 export function getGroupMinFrequency(group: Group) {
   const notes = getNoteNumbers(group)
@@ -98,19 +75,6 @@ export function getGroupMinFrequency(group: Group) {
   })
   const midiValue = Number.isFinite(minMidi) ? minMidi : DEFAULT_MIDI_NOTE
   return Tone.Frequency(midiValue, 'midi').toFrequency()
-}
-
-function applyRowMidis(rowIndices: number[], midiValues: number[]) {
-  rowIndices.forEach((rowIndex, midiIndex) => {
-    const midi = clampMidi(midiValues[midiIndex] ?? midiValues[midiValues.length - 1] ?? DEFAULT_MIDI_NOTE)
-    const noteName = midiToNoteName(midi)
-    rowNoteNames[rowIndex] = noteName
-    if (rowInputs[rowIndex]) {
-      rowInputs[rowIndex].value = noteName
-    }
-    updateNoteNumbersForRow(rowIndex, midi)
-    updateRowCellLabels(rowIndex)
-  })
 }
 
 function computeNoteDurationTicks(startStep: number, startTicks: number[], loopTicks: number): number {
@@ -188,40 +152,6 @@ export function setPlayingStep(step: number | null): void {
   }
 }
 
-function updateStepLabelStates() {
-  stepLabels.forEach((label, step) => {
-    const state = stepStates[step]
-    label.classList.toggle('rest', state === 'rest')
-    label.classList.toggle('tie', state === 'tie')
-    label.setAttribute('aria-label', `Step ${step + 1}: ${state} (click to cycle)`)
-  })
-}
-
-function cycleStepState(step: number, onSequenceChange: SequenceChangeHandler) {
-  const current = stepStates[step]
-  stepStates[step] = current === 'note' ? 'rest' : current === 'rest' ? 'tie' : 'note'
-  updateStepLabelStates()
-  void onSequenceChange()
-}
-
-function updateGridActiveStates() {
-  gridCells.forEach((cells, rowIndex) => {
-    const selections = getSelections(rowIndexToGroup(rowIndex))
-    cells.forEach((cell, stepIndex) => {
-      const active = selections[stepIndex] === rowIndex
-      cell.classList.toggle('active', active)
-      cell.setAttribute('aria-pressed', active ? 'true' : 'false')
-    })
-  })
-}
-
-function updateRowCellLabels(rowIndex: number) {
-  const noteName = rowNoteNames[rowIndex]
-  gridCells[rowIndex]?.forEach((cell, stepIndex) => {
-    cell.setAttribute('aria-label', `Step ${stepIndex + 1}, row ${rowIndex + 1} (${noteName})`)
-  })
-}
-
 export function updateLoopNote() {
   if (loopNoteElement) {
     loopNoteElement.textContent = `Loop runs at ${getBpmValue()} BPM with a 16-step 16n sequence and explicit loop boundary.`
@@ -232,17 +162,6 @@ export function updateNdjsonDisplay() {
   if (ndjsonElement) {
     ndjsonElement.value = ndjsonSequence
   }
-}
-
-function updateNoteNumbersForRow(rowIndex: number, midiValue: number) {
-  const group = rowIndexToGroup(rowIndex)
-  const selections = getSelections(group)
-  const notes = getNoteNumbers(group)
-  selections.forEach((selectedRow, stepIndex) => {
-    if (selectedRow === rowIndex) {
-      notes[stepIndex] = midiValue
-    }
-  })
 }
 
 function applyStepState(stepIndex: number, rowIndex: number) {
@@ -325,132 +244,15 @@ function scheduleRowNoteInputChange(
   }, 300)
 }
 
-function randomizeRowPitches(
-  onSequenceChange: SequenceChangeHandler,
-  triggerSequenceChange = true,
-  updateActiveState = true,
-) {
-  const scaleIntervals = pickScaleIntervals()
-  const keyIndex = pickKeyIndex()
-
-  const groupAScaleNotes = collectScaleNotes(GROUP_A_MIN_MIDI, GROUP_A_MAX_MIDI, keyIndex, scaleIntervals)
-  const pickedA = pickUniqueNotes(groupAScaleNotes, GROUP_SIZE)
-  while (pickedA.length < GROUP_SIZE && groupAScaleNotes.length) {
-    pickedA.push(groupAScaleNotes[pickedA.length % groupAScaleNotes.length]!)
-  }
-  applyRowMidis([0, 1, 2], pickedA.sort((a, b) => b - a))
-
-  const groupBScaleNotes = collectScaleNotes(GROUP_B_MIN_MIDI, GROUP_B_MAX_MIDI, keyIndex, scaleIntervals)
-  const useRootPattern = Math.random() < 0.5
-  let groupBMidis: number[]
-  if (useRootPattern && groupBScaleNotes.length) {
-    const root = groupBScaleNotes[Math.floor(Math.random() * groupBScaleNotes.length)]!
-    const lower = findPreviousScaleNote(root, keyIndex, scaleIntervals)
-    const octaveUp = clampMidi(root + 12)
-    groupBMidis = [octaveUp, lower, root]
-  } else {
-    const pickedB = pickUniqueNotes(groupBScaleNotes, GROUP_SIZE)
-    while (pickedB.length < GROUP_SIZE && groupBScaleNotes.length) {
-      pickedB.push(groupBScaleNotes[pickedB.length % groupBScaleNotes.length]!)
-    }
-    groupBMidis = pickedB.length
-      ? pickedB.sort((a, b) => b - a)
-      : [noteNameToMidi(rowNoteNames[3]), noteNameToMidi(rowNoteNames[4]), noteNameToMidi(rowNoteNames[5])]
-  }
-  applyRowMidis([3, 4, 5], groupBMidis)
-
-  if (updateActiveState) {
-    updateGridActiveStates()
-  }
-  if (triggerSequenceChange) {
-    void onSequenceChange()
-  }
-}
-
-function randomizeStepStates() {
-  stepStates.fill('note')
-  for (let step = 0; step < STEPS; step++) {
-    const r = Math.random()
-    if (r < 0.2) {
-      stepStates[step] = 'rest'
-    } else if (r < 0.4) {
-      // Tie is valid only if previous step is not a rest (and not the first step)
-      if (step > 0 && stepStates[step - 1] !== 'rest') {
-        stepStates[step] = 'tie'
-      }
-    }
-  }
-}
-
-function postProcessGroupAStates() {
-  const maxIterations = STEPS * 2
-  let iterations = 0
-  let changed = true
-  while (changed && iterations < maxIterations) {
-    changed = false
-    iterations++
-    for (let step = 0; step < STEPS - 1; step++) {
-      if (
-        stepStates[step] === 'note' &&
-        stepStates[step + 1] === 'note' &&
-        noteNumbersA[step] === noteNumbersA[step + 1]
-      ) {
-        stepStates[step + 1] = Math.random() < 0.5 ? 'tie' : 'rest'
-        changed = true
-      }
-    }
-  }
-}
-
-function randomizeGridSelections(
-  onSequenceChange: SequenceChangeHandler,
-  triggerSequenceChange = true,
-  updateActiveState = true,
-) {
-  const groupARowMidis = [0, 1, 2].map((row) => noteNameToMidi(rowNoteNames[row]))
-  for (let step = 0; step < STEPS; step++) {
-    const rowIndex = Math.floor(Math.random() * GROUP_SIZE)
-    selectedRowsA[step] = rowIndex
-    noteNumbersA[step] = groupARowMidis[rowIndex] ?? noteNumbersA[step]
-  }
-
-  const groupBRowMidis = [0, 1, 2].map((row) => noteNameToMidi(rowNoteNames[GROUP_SIZE + row]))
-  const useSparsePattern = Math.random() < 0.5
-  for (let step = 0; step < STEPS; step++) {
-    if (useSparsePattern) {
-      selectedRowsB[step] = GROUP_SIZE + 2
-      noteNumbersB[step] = groupBRowMidis[2] ?? noteNumbersB[step]
-      if (Math.random() < 0.35) {
-        const altIndex = Math.random() < 0.5 ? 0 : 1
-        selectedRowsB[step] = GROUP_SIZE + altIndex
-        noteNumbersB[step] = groupBRowMidis[altIndex] ?? noteNumbersB[step]
-      }
-    } else {
-      const rowIndex = Math.floor(Math.random() * GROUP_SIZE)
-      selectedRowsB[step] = GROUP_SIZE + rowIndex
-      noteNumbersB[step] = groupBRowMidis[rowIndex] ?? noteNumbersB[step]
-    }
-  }
-
-  // Randomize step states after grid selections are set (noteNumbersA is updated above)
-  randomizeStepStates()
-  postProcessGroupAStates()
-
-  if (updateActiveState) {
-    updateGridActiveStates()
-    updateStepLabelStates()
-  }
-  if (triggerSequenceChange) {
-    void onSequenceChange()
-  }
-}
-
 export function randomizeAll(onSequenceChange: SequenceChangeHandler) {
-  randomizeRowPitches(onSequenceChange, false, false)
-  randomizeGridSelections(onSequenceChange, false, false)
-  updateGridActiveStates()
+  return _randomizeAll(onSequenceChange)
+}
+
+function cycleStepState(step: number, onSequenceChange: SequenceChangeHandler) {
+  const current = stepStates[step]
+  stepStates[step] = current === 'note' ? 'rest' : current === 'rest' ? 'tie' : 'note'
   updateStepLabelStates()
-  return onSequenceChange()
+  void onSequenceChange()
 }
 
 function renderNoteGrid(onSequenceChange: SequenceChangeHandler) {
@@ -603,3 +405,4 @@ export function initializeNoteGrid(onSequenceChange: SequenceChangeHandler, onNd
   const randomGridButton = document.querySelector<HTMLButtonElement>('#random-grid')
   randomGridButton?.addEventListener('click', () => randomizeGridSelections(onSequenceChange))
 }
+
