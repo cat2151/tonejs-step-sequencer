@@ -77,6 +77,13 @@ export function getGroupMinFrequency(group: Group) {
   return Tone.Frequency(midiValue, 'midi').toFrequency()
 }
 
+export function getStepFrequency(group: Group, step: number): number {
+  const notes = getNoteNumbers(group)
+  const midi = notes[step] ?? DEFAULT_MIDI_NOTE
+  const safeMidi = Number.isFinite(midi) ? midi : DEFAULT_MIDI_NOTE
+  return Tone.Frequency(safeMidi, 'midi').toFrequency()
+}
+
 function computeNoteDurationTicks(startStep: number, startTicks: number[], loopTicks: number): number {
   for (let i = startStep + 1; i < STEPS; i++) {
     if (stepStates[i] !== 'tie') {

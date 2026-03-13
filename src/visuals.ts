@@ -1,6 +1,7 @@
 import * as Tone from 'tone'
 import type { SequencerNodes } from 'tonejs-json-sequencer'
 import { MONITOR_A_NODE_ID, MONITOR_B_NODE_ID, WAVEFORM_BUFFER_MIN } from './constants'
+import { getCurrentStepFromSeconds } from './noteGrid'
 import {
   createWaveformState,
   drawGroupVisuals,
@@ -9,7 +10,7 @@ import {
   type CanvasSize,
 } from './visualsGroup'
 
-export function createVisuals(nodes: SequencerNodes) {
+export function createVisuals(nodes: SequencerNodes, getElapsedSeconds: () => number | null) {
   const waveformCanvasA = document.querySelector<HTMLCanvasElement>('#waveform-a')
   const fftCanvasA = document.querySelector<HTMLCanvasElement>('#fft-a')
   const waveformCanvasB = document.querySelector<HTMLCanvasElement>('#waveform-b')
@@ -145,6 +146,9 @@ export function createVisuals(nodes: SequencerNodes) {
   function drawVisuals() {
     if (!waveformCtxA || !fftCtxA || !waveformCanvasA || !fftCanvasA || !waveformCtxB || !fftCtxB || !waveformCanvasB || !fftCanvasB) return
 
+    const elapsed = getElapsedSeconds()
+    const currentStep = elapsed !== null ? getCurrentStepFromSeconds(elapsed) : 0
+
     const timingsA = drawGroupVisuals(
       'A',
       waveformState,
@@ -156,6 +160,7 @@ export function createVisuals(nodes: SequencerNodes) {
       fftCtxA,
       fftCanvasA,
       fftSizeA,
+      currentStep,
     )
 
     const timingsB = drawGroupVisuals(
@@ -169,6 +174,7 @@ export function createVisuals(nodes: SequencerNodes) {
       fftCtxB,
       fftCanvasB,
       fftSizeB,
+      currentStep,
     )
 
     updateTimingDisplay(waveformTimeA, timingsA.waveformMs)

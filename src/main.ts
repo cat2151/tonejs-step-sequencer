@@ -60,7 +60,11 @@ let startingPromise: Promise<void> | null = null
 let sequenceUpdatePromise: Promise<void> | null = null
 let lastRestartedToneVersion = -1
 
-const visuals = createVisuals(nodes)
+const visuals = createVisuals(nodes, () => {
+  const startTime = (player as any).playbackState?.startTime as number | undefined
+  if (startTime == null) return null
+  return Math.max(0, Tone.now() - startTime)
+})
 
 const { setNdjsonError, clearNdjsonError, toggleNdjsonErrorDetails, toggleNdjsonVisibility } =
   createNdjsonErrorUI(
