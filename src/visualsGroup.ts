@@ -8,7 +8,7 @@ import {
   WAVEFORM_SILENCE_THRESHOLD,
   type Group,
 } from './constants'
-import { getGroupMinFrequency } from './noteGrid'
+import { getStepFrequency } from './noteGrid'
 
 export type CanvasSize = { width: number; height: number }
 
@@ -57,10 +57,10 @@ export function resetWaveformGains(state: WaveformState) {
   state.gains.B.framesSincePeak = 0
 }
 
-function calculateCycleSamples(group: Group) {
-  const minFrequency = Math.max(getGroupMinFrequency(group), 1)
+function calculateCycleSamples(frequency: number) {
+  const safeFrequency = Math.max(frequency, 1)
   const sampleRate = Tone.getContext().sampleRate || 44100
-  return Math.max(Math.round(sampleRate / minFrequency), 1)
+  return Math.max(Math.round(sampleRate / safeFrequency), 1)
 }
 
 function calculateWaveformBufferSize(windowLength: number) {
@@ -243,9 +243,11 @@ export function drawGroupVisuals(
   fftCtx: CanvasRenderingContext2D,
   fftCanvas: HTMLCanvasElement,
   fftSize: CanvasSize,
+  currentStep: number,
 ): { waveformMs: number; fftMs: number } {
   const waveformStart = performance.now()
-  const cycleLength = calculateCycleSamples(group)
+  const stepFreq = getStepFrequency(group, currentStep)
+  const cycleLength = calculateCycleSamples(stepFreq)
   const targetWindowLength = calculateWindowSamples(cycleLength)
   ensureWaveformBuffer(waveformAnalyser, targetWindowLength)
   const latestFrame = waveformAnalyser.getValue() as Float32Array
@@ -345,6 +347,17 @@ export function drawGroupVisuals(
     waveformCtx.textBaseline = 'top'
     waveformCtx.fillText(displayCycles.toString(), 8, 6)
   }
+
+  const sampleRateVal = Tone.getContext().sampleRate || 44100
+  const lagMs = (waveformAnalyser.size / sampleRateVal) * 1000
+  waveformCtx.fillStyle = 'rgba(124, 242, 194, 0.6)'
+  waveformCtx.font = '10px "JetBrains Mono", monospace'
+  waveformCtx.textBaseline = 'bottom'
+  waveformCtx.fillText(
+    `step:${currentStep + 1} ${stepFreq.toFixed(0)} Hz lag:${lagMs.toFixed(0)} ms`,
+    8,
+    waveformHeight - 4,
+  )
 
   const waveformMs = performance.now() - waveformStart
 

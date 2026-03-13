@@ -60,7 +60,15 @@ let startingPromise: Promise<void> | null = null
 let sequenceUpdatePromise: Promise<void> | null = null
 let lastRestartedToneVersion = -1
 
-const visuals = createVisuals(nodes)
+// Access playbackState via any-cast since it's private in the library's typedefs,
+// consistent with how createdNodeIds is accessed elsewhere in this file.
+function getPlayerElapsedSeconds(): number | null {
+  const startTime = (player as any).playbackState?.startTime as number | undefined
+  if (startTime == null) return null
+  return Math.max(0, Tone.now() - startTime)
+}
+
+const visuals = createVisuals(nodes, getPlayerElapsedSeconds)
 
 const { setNdjsonError, clearNdjsonError, toggleNdjsonErrorDetails, toggleNdjsonVisibility } =
   createNdjsonErrorUI(
@@ -238,11 +246,8 @@ function tickStepCursor() {
     stepCursorFrameId = null
     return
   }
-  // Access playbackState via any-cast since it's private in the library's typedefs,
-  // consistent with how createdNodeIds is accessed elsewhere in this file.
-  const startTime = (player as any).playbackState?.startTime as number | undefined
-  if (startTime != null) {
-    const elapsed = Math.max(0, Tone.now() - startTime)
+  const elapsed = getPlayerElapsedSeconds()
+  if (elapsed !== null) {
     setPlayingStep(getCurrentStepFromSeconds(elapsed))
   }
   updateAutoGainDisplay()
