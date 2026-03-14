@@ -165,38 +165,42 @@ function rebuildMmlFromBlocks(mmlText: string, blocks: ToneJsonBlock[]) {
   return result
 }
 
+function computeRandomValue(definition: RandomParamDefinition): number | undefined {
+  const hasValues = Array.isArray(definition.values) && definition.values.length > 0
+  if (hasValues) {
+    const valueOptions = definition.values!
+    return valueOptions[Math.floor(Math.random() * valueOptions.length)] ?? valueOptions[0]
+  }
+  const min = typeof definition.min === 'number' ? definition.min : undefined
+  const max = typeof definition.max === 'number' ? definition.max : undefined
+  if (min === undefined || max === undefined) return undefined
+  const low = Math.min(min, max)
+  const high = Math.max(min, max)
+  const randomValue = low + Math.random() * (high - low)
+  if (definition.integer) {
+    const intMin = Math.ceil(low)
+    const intMax = Math.floor(high)
+    if (intMin <= intMax) {
+      return intMin + Math.floor(Math.random() * (intMax - intMin + 1))
+    }
+    const rounded = Math.round(randomValue)
+    return Math.min(Math.max(rounded, low), high)
+  }
+  return Math.round(randomValue * 1000) / 1000
+}
+
 export function applyRandomDefinitionsToMml(mmlText: string, definitions: RandomParamDefinition[]) {
   const blocks = extractToneJsonBlocks(mmlText)
   if (!blocks.length) return { applied: false, mml: mmlText }
 
   let applied = false
   definitions.forEach((definition) => {
-    const hasValues = Array.isArray(definition.values) && definition.values.length > 0
-    const valueOptions = hasValues ? definition.values : null
-    const min = typeof definition.min === 'number' ? definition.min : undefined
-    const max = typeof definition.max === 'number' ? definition.max : undefined
-    if (!hasValues && (min === undefined || max === undefined)) return
-    const low = min !== undefined && max !== undefined ? Math.min(min, max) : undefined
-    const high = min !== undefined && max !== undefined ? Math.max(min, max) : undefined
+    const numericValue = computeRandomValue(definition)
+    if (numericValue === undefined) return
     const nodeSegments = definition.path.split('.')
     const candidateNodeType = nodeSegments.length > 1 ? nodeSegments[0] ?? '' : ''
     const hasNodePrefix = Boolean(candidateNodeType) && blocks.some((block) => block.nodeType === candidateNodeType)
     const pathSegments = hasNodePrefix ? nodeSegments.slice(1) : nodeSegments
-    const numericValue = hasValues
-      ? valueOptions![Math.floor(Math.random() * valueOptions!.length)] ?? valueOptions![0]
-      : (() => {
-          const randomValue = (low ?? 0) + Math.random() * ((high ?? 0) - (low ?? 0))
-          if (definition.integer) {
-            const intMin = Math.ceil(low ?? 0)
-            const intMax = Math.floor(high ?? 0)
-            if (intMin <= intMax) {
-              return intMin + Math.floor(Math.random() * (intMax - intMin + 1))
-            }
-            const rounded = Math.round(randomValue)
-            return Math.min(Math.max(rounded, low ?? rounded), high ?? rounded)
-          }
-          return Math.round(randomValue * 1000) / 1000
-        })()
     for (const block of blocks) {
       if (hasNodePrefix && block.nodeType !== candidateNodeType) continue
       if (setValueAtPath(block.json, pathSegments, numericValue)) {
@@ -208,4 +212,45 @@ export function applyRandomDefinitionsToMml(mmlText: string, definitions: Random
 
   if (!applied) return { applied: false, mml: mmlText }
   return { applied: true, mml: rebuildMmlFromBlocks(mmlText, blocks) }
+}
+
+export function applyRandomDefinitionsToJson(
+  jsonText: string,
+  definitions: RandomParamDefinition[],
+): { applied: boolean; json: string } {
+  let events: unknown[]
+  try {
+    const parsed = JSON.parse(jsonText) as unknown
+    if (!Array.isArray(parsed)) return { applied: false, json: jsonText }
+    events = parsed
+  } catch {
+    return { applied: false, json: jsonText }
+  }
+
+  const cloned = JSON.parse(JSON.stringify(events)) as unknown[]
+  let applied = false
+
+  definitions.forEach((definition) => {
+    const numericValue = computeRandomValue(definition)
+    if (numericValue === undefined) return
+    const nodeSegments = definition.path.split('.')
+    const candidateNodeType = nodeSegments.length > 1 ? nodeSegments[0] ?? '' : ''
+    const pathSegments = candidateNodeType ? nodeSegments.slice(1) : nodeSegments
+
+    for (const event of cloned) {
+      if (!event || typeof event !== 'object') continue
+      const ev = event as Record<string, unknown>
+      if (ev.eventType !== 'createNode') continue
+      if (candidateNodeType && ev.nodeType !== candidateNodeType) continue
+      const args = ev.args
+      if (!args || typeof args !== 'object') continue
+      if (setValueAtPath(args, pathSegments, numericValue)) {
+        applied = true
+        break
+      }
+    }
+  })
+
+  if (!applied) return { applied: false, json: jsonText }
+  return { applied: true, json: JSON.stringify(cloned, null, 2) }
 }
