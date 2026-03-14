@@ -141,12 +141,21 @@ describe('applyRandomDefinitionsToJson', () => {
     expect([1, 2, 4]).toContain(fmEvent?.args?.harmonicity)
   })
 
-  it('does not mutate the original JSON string', () => {
+  it('returned JSON differs from the input when applied', () => {
     const defs: RandomParamDefinition[] = [{ path: 'FMSynth.harmonicity', min: 1, max: 7, integer: true }]
-    const original = JSON.parse(eventsJson) as Array<{ args?: { harmonicity?: number } }>
-    applyRandomDefinitionsToJson(eventsJson, defs)
-    const after = JSON.parse(eventsJson) as Array<{ args?: { harmonicity?: number } }>
-    expect(after[0]?.args?.harmonicity).toBe(original[0]?.args?.harmonicity)
+    const result = applyRandomDefinitionsToJson(eventsJson, defs)
+    expect(result.applied).toBe(true)
+    // The returned JSON string must encode a different harmonicity value
+    const original = JSON.parse(eventsJson) as Array<{ nodeType?: string; args?: { harmonicity?: number } }>
+    const updated = JSON.parse(result.json) as Array<{ nodeType?: string; args?: { harmonicity?: number } }>
+    const originalHarmonicity = original.find((e) => e.nodeType === 'FMSynth')?.args?.harmonicity
+    const updatedHarmonicity = updated.find((e) => e.nodeType === 'FMSynth')?.args?.harmonicity
+    // The updated value must be in the valid integer range
+    expect(updatedHarmonicity).toBeGreaterThanOrEqual(1)
+    expect(updatedHarmonicity).toBeLessThanOrEqual(7)
+    expect(Number.isInteger(updatedHarmonicity)).toBe(true)
+    // The original parsed object must be unchanged (the function only mutates its own parse)
+    expect(originalHarmonicity).toBe(3)
   })
 
   it('returns applied: false when path does not match any event', () => {

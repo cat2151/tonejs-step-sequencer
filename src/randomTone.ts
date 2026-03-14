@@ -180,11 +180,8 @@ function computeRandomValue(definition: RandomParamDefinition): number | undefin
   if (definition.integer) {
     const intMin = Math.ceil(low)
     const intMax = Math.floor(high)
-    if (intMin <= intMax) {
-      return intMin + Math.floor(Math.random() * (intMax - intMin + 1))
-    }
-    const rounded = Math.round(randomValue)
-    return Math.min(Math.max(rounded, low), high)
+    if (intMin > intMax) return undefined
+    return intMin + Math.floor(Math.random() * (intMax - intMin + 1))
   }
   return Math.round(randomValue * 1000) / 1000
 }
@@ -227,7 +224,6 @@ export function applyRandomDefinitionsToJson(
     return { applied: false, json: jsonText }
   }
 
-  const cloned = JSON.parse(JSON.stringify(events)) as unknown[]
   let applied = false
 
   definitions.forEach((definition) => {
@@ -237,7 +233,7 @@ export function applyRandomDefinitionsToJson(
     const candidateNodeType = nodeSegments.length > 1 ? nodeSegments[0] ?? '' : ''
     const pathSegments = candidateNodeType ? nodeSegments.slice(1) : nodeSegments
 
-    for (const event of cloned) {
+    for (const event of events) {
       if (!event || typeof event !== 'object') continue
       const ev = event as Record<string, unknown>
       if (ev.eventType !== 'createNode') continue
@@ -252,5 +248,5 @@ export function applyRandomDefinitionsToJson(
   })
 
   if (!applied) return { applied: false, json: jsonText }
-  return { applied: true, json: JSON.stringify(cloned, null, 2) }
+  return { applied: true, json: JSON.stringify(events, null, 2) }
 }
