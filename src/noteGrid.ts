@@ -102,20 +102,22 @@ export function buildSequenceFromNotes() {
   const groupBNodeId = toneB.instrumentNodeId
   const noteEvents: SequenceEvent[] = []
   for (let step = 0; step < STEPS; step++) {
-    if (stepStates[step] === 'rest' || stepStates[step] === 'tie') continue
-    const durationTicks = computeNoteDurationTicks(step, startTicks, loopTicks)
-    noteEvents.push(
-      {
+    // Rests and ties apply only to Group A
+    if (stepStates[step] !== 'rest' && stepStates[step] !== 'tie') {
+      const durationTicks = computeNoteDurationTicks(step, startTicks, loopTicks)
+      noteEvents.push({
         eventType: 'triggerAttackRelease',
         nodeId: groupANodeId,
         args: [midiToNoteName(noteNumbersA[step]), `${durationTicks}i`, `+${startTicks[step]}i`],
-      },
-      {
-        eventType: 'triggerAttackRelease',
-        nodeId: groupBNodeId,
-        args: [midiToNoteName(noteNumbersB[step]), `${durationTicks}i`, `+${startTicks[step]}i`],
-      },
-    )
+      })
+    }
+    // Group B always plays; rests and ties do not affect it
+    const durationTicksB = (startTicks[step + 1] ?? loopTicks) - startTicks[step]
+    noteEvents.push({
+      eventType: 'triggerAttackRelease',
+      nodeId: groupBNodeId,
+      args: [midiToNoteName(noteNumbersB[step]), `${durationTicksB}i`, `+${startTicks[step]}i`],
+    })
   }
 
   const ndjsonEvents: SequenceEvent[] = [
