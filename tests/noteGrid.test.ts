@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { DEFAULT_BPM, PPQ, SIXTEENTH_TICKS, STEPS } from '../src/constants'
+import { DEFAULT_BPM, GROUP_A_NODE_ID, GROUP_B_NODE_ID, PPQ, SIXTEENTH_TICKS, STEPS } from '../src/constants'
 import {
   buildSequenceFromNotes,
   getCurrentStep,
@@ -50,43 +50,50 @@ describe('noteGrid rest/tie states', () => {
     resetStepStates()
   })
 
-  it('skips trigger events for rest steps', () => {
+  it('skips Group A trigger events for rest steps; Group B still plays', () => {
     setStepState(0, 'rest')
     buildSequenceFromNotes()
     const events = getNdjsonSequence()
       .trim()
       .split('\n')
-      .map((line) => JSON.parse(line) as { eventType?: string; args?: unknown[] })
+      .map((line) => JSON.parse(line) as { eventType?: string; nodeId?: number; args?: unknown[] })
     const triggerEvents = events.filter((event) => event.eventType === 'triggerAttackRelease')
-    expect(triggerEvents).toHaveLength((STEPS - 1) * 2)
+    // Group A loses one step, Group B always plays all steps
+    expect(triggerEvents).toHaveLength(STEPS * 2 - 1)
   })
 
-  it('skips trigger events for tie steps', () => {
+  it('skips Group A trigger events for tie steps; Group B still plays', () => {
     setStepState(1, 'tie')
     buildSequenceFromNotes()
     const events = getNdjsonSequence()
       .trim()
       .split('\n')
-      .map((line) => JSON.parse(line) as { eventType?: string; args?: unknown[] })
+      .map((line) => JSON.parse(line) as { eventType?: string; nodeId?: number; args?: unknown[] })
     const triggerEvents = events.filter((event) => event.eventType === 'triggerAttackRelease')
-    expect(triggerEvents).toHaveLength((STEPS - 1) * 2)
+    // Group A loses one step, Group B always plays all steps
+    expect(triggerEvents).toHaveLength(STEPS * 2 - 1)
   })
 
-  it('extends note duration to cover tied steps', () => {
+  it('extends Group A note duration to cover tied steps; Group B uses per-step duration', () => {
     setStepState(1, 'tie')
     buildSequenceFromNotes()
     const events = getNdjsonSequence()
       .trim()
       .split('\n')
-      .map((line) => JSON.parse(line) as { eventType?: string; args?: unknown[] })
+      .map((line) => JSON.parse(line) as { eventType?: string; nodeId?: number; args?: unknown[] })
     const triggerEvents = events.filter((event) => event.eventType === 'triggerAttackRelease')
-    // Step 0 now covers 2 sixteenth notes (steps 0 and 1)
-    const step0Events = triggerEvents.filter((e) => {
+    // Group A step 0 now covers 2 sixteenth notes (steps 0 and 1)
+    const groupAStep0Events = triggerEvents.filter((e) => {
       const args = e.args as string[]
-      return args[2] === `+0i`
+      return e.nodeId === GROUP_A_NODE_ID && args[2] === `+0i` && args[1] === `${SIXTEENTH_TICKS * 2}i`
     })
-    expect(step0Events.length).toBe(2)
-    expect(step0Events[0]?.args?.[1]).toBe(`${SIXTEENTH_TICKS * 2}i`)
+    expect(groupAStep0Events.length).toBe(1)
+    // Group B step 1 still plays with single-step duration
+    const groupBStep1Events = triggerEvents.filter((e) => {
+      const args = e.args as string[]
+      return e.nodeId === GROUP_B_NODE_ID && args[2] === `+${SIXTEENTH_TICKS}i` && args[1] === `${SIXTEENTH_TICKS}i`
+    })
+    expect(groupBStep1Events.length).toBeGreaterThanOrEqual(1)
   })
 
   it('uses single-step tick duration when no ties follow', () => {
@@ -100,7 +107,7 @@ describe('noteGrid rest/tie states', () => {
     expect(triggerEvents[0]?.args?.[1]).toBe(`${SIXTEENTH_TICKS}i`)
   })
 
-  it('skips multiple consecutive rest steps', () => {
+  it('skips multiple consecutive Group A rest steps; Group B plays all steps', () => {
     setStepState(2, 'rest')
     setStepState(5, 'rest')
     setStepState(10, 'rest')
@@ -110,27 +117,28 @@ describe('noteGrid rest/tie states', () => {
       .split('\n')
       .map((line) => JSON.parse(line) as { eventType?: string; args?: unknown[] })
     const triggerEvents = events.filter((event) => event.eventType === 'triggerAttackRelease')
-    expect(triggerEvents).toHaveLength((STEPS - 3) * 2)
+    // Group A loses 3 steps, Group B plays all 16
+    expect(triggerEvents).toHaveLength(STEPS * 2 - 3)
   })
 
-  it('extends duration across multiple consecutive ties', () => {
+  it('extends Group A duration across multiple consecutive ties; Group B plays every step', () => {
     setStepState(3, 'tie')
     setStepState(4, 'tie')
     buildSequenceFromNotes()
     const events = getNdjsonSequence()
       .trim()
       .split('\n')
-      .map((line) => JSON.parse(line) as { eventType?: string; args?: unknown[] })
+      .map((line) => JSON.parse(line) as { eventType?: string; nodeId?: number; args?: unknown[] })
     const triggerEvents = events.filter((event) => event.eventType === 'triggerAttackRelease')
-    // Steps 3 and 4 are ties, so step 2 covers 3 sixteenth notes
-    expect(triggerEvents).toHaveLength((STEPS - 2) * 2)
+    // Group A loses 2 steps (ties), Group B plays all 16
+    expect(triggerEvents).toHaveLength(STEPS * 2 - 2)
+    // Group A step 2 covers 3 sixteenth notes
     const step2StartTicks = SIXTEENTH_TICKS * 2
-    const step2Events = triggerEvents.filter((e) => {
+    const groupAStep2Events = triggerEvents.filter((e) => {
       const args = e.args as string[]
-      return args[2] === `+${step2StartTicks}i`
+      return e.nodeId === GROUP_A_NODE_ID && args[2] === `+${step2StartTicks}i` && args[1] === `${SIXTEENTH_TICKS * 3}i`
     })
-    expect(step2Events.length).toBe(2)
-    expect(step2Events[0]?.args?.[1]).toBe(`${SIXTEENTH_TICKS * 3}i`)
+    expect(groupAStep2Events.length).toBe(1)
   })
 })
 
