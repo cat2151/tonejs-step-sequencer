@@ -32,8 +32,8 @@ function randomizeStepStates() {
     if (r < 0.2) {
       stepStates[step] = 'rest'
     } else if (r < 0.4) {
-      // Tie is valid only if previous step is not a rest (and not the first step)
-      if (step > 0 && stepStates[step - 1] !== 'rest') {
+      // Tie is valid only if: not the first step, previous step is not rest, and pitches match
+      if (step > 0 && stepStates[step - 1] !== 'rest' && noteNumbersA[step] === noteNumbersA[step - 1]) {
         stepStates[step] = 'tie'
       }
     }
@@ -56,6 +56,13 @@ function postProcessGroupAStates() {
         stepStates[step + 1] = Math.random() < 0.5 ? 'tie' : 'rest'
         changed = true
       }
+    }
+  }
+  // Fix any tie that follows a rest (can occur when postProcessGroupAStates changes a note to
+  // rest while the subsequent step was already set to tie by randomizeStepStates)
+  for (let step = 1; step < STEPS; step++) {
+    if (stepStates[step] === 'tie' && stepStates[step - 1] === 'rest') {
+      stepStates[step] = 'note'
     }
   }
 }

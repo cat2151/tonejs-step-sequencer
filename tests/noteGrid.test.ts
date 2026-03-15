@@ -9,6 +9,8 @@ import {
   resetStepStates,
   setStepState,
 } from '../src/noteGrid'
+import { randomizeGridSelections } from '../src/noteGridRandomize'
+import { noteNumbersA, stepStates } from '../src/noteGridState'
 
 const expectedLoopTicks = Math.round(SIXTEENTH_TICKS * STEPS)
 
@@ -227,5 +229,38 @@ describe('getCurrentStepFromSeconds', () => {
 
   it('wraps around at loopDuration + stepSeconds (step 1)', () => {
     expect(getCurrentStepFromSeconds(getLoopDurationSeconds() + stepSeconds)).toBe(1)
+  })
+})
+
+describe('randomizeGridSelections tie invariants', () => {
+  const noopHandler = () => Promise.resolve()
+
+  it('never sets tie on the first step across many randomizations', () => {
+    for (let i = 0; i < 200; i++) {
+      randomizeGridSelections(noopHandler, false, false)
+      expect(stepStates[0]).not.toBe('tie')
+    }
+  })
+
+  it('never sets tie when the previous step is rest across many randomizations', () => {
+    for (let i = 0; i < 200; i++) {
+      randomizeGridSelections(noopHandler, false, false)
+      for (let step = 1; step < STEPS; step++) {
+        if (stepStates[step] === 'tie') {
+          expect(stepStates[step - 1]).not.toBe('rest')
+        }
+      }
+    }
+  })
+
+  it('never sets tie when pitches differ from the previous step across many randomizations', () => {
+    for (let i = 0; i < 200; i++) {
+      randomizeGridSelections(noopHandler, false, false)
+      for (let step = 1; step < STEPS; step++) {
+        if (stepStates[step] === 'tie') {
+          expect(noteNumbersA[step]).toBe(noteNumbersA[step - 1])
+        }
+      }
+    }
   })
 })
