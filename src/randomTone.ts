@@ -187,14 +187,14 @@ export function applyRandomDefinitionsToMml(
     const hasNodePrefix = Boolean(candidateNodeType) && blocks.some((block) => block.nodeType === candidateNodeType)
     const pathSegments = hasNodePrefix ? nodeSegments.slice(1) : nodeSegments
     const numericValue = hasValues
-      ? valueOptions![Math.floor(rng() * valueOptions!.length)] ?? valueOptions![0]
+      ? valueOptions![Math.min(Math.floor(rng() * valueOptions!.length), valueOptions!.length - 1)]
       : (() => {
           const randomValue = (low ?? 0) + rng() * ((high ?? 0) - (low ?? 0))
           if (definition.integer) {
             const intMin = Math.ceil(low ?? 0)
             const intMax = Math.floor(high ?? 0)
             if (intMin <= intMax) {
-              return intMin + Math.floor(rng() * (intMax - intMin + 1))
+              return Math.min(intMin + Math.floor(rng() * (intMax - intMin + 1)), intMax)
             }
             const rounded = Math.round(randomValue)
             return Math.min(Math.max(rounded, low ?? rounded), high ?? rounded)

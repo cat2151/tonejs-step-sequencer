@@ -60,18 +60,26 @@ describe('applyRandomDefinitionsToMml (pure function with injectable rng)', () =
     expect(result.mml).toContain('"harmonicity": 1')
   })
 
-  it('applies integer range definition deterministically', () => {
+  it('clamps values-array index when rng returns exactly 1', () => {
+    const definitions = parseRandomDefinitions(
+      JSON.stringify([['FMSynth.harmonicity', [1, 2, 3]]]),
+    )
+    // rng=1 must not go out of bounds; should pick the last element (3)
+    const result = applyRandomDefinitionsToMml(SAMPLE_MML, definitions, () => 1)
+    expect(result.applied).toBe(true)
+    expect(result.mml).toContain('"harmonicity": 3')
+  })
+
+  it('clamps integer range result when rng returns exactly 1', () => {
     const definitions = parseRandomDefinitions(
       JSON.stringify([['FMSynth.harmonicity', 1, 5, true]]),
     )
-    // With rng=0.5, integer midpoint of [1,5] should be 3
-    const result = applyRandomDefinitionsToMml(SAMPLE_MML, definitions, () => 0.5)
+    // rng=1 must produce at most intMax (5), not 6
+    const result = applyRandomDefinitionsToMml(SAMPLE_MML, definitions, () => 1)
     expect(result.applied).toBe(true)
     const match = result.mml.match(/"harmonicity":\s*(\d+)/)
     expect(match).not.toBeNull()
     const value = Number(match![1])
-    expect(Number.isInteger(value)).toBe(true)
-    expect(value).toBeGreaterThanOrEqual(1)
     expect(value).toBeLessThanOrEqual(5)
   })
 })
