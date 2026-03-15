@@ -6,6 +6,7 @@ import { normalizeToneEvents } from '../src/toneState'
 describe('normalizeToneEvents', () => {
   it('connects Instrument → Effect → Monitor in series (not Instrument → Monitor and Effect → Monitor)', () => {
     // These are the events that tonejs-mml-to-json generates for "@FMSynth{} @PingPongDelay{} c"
+    // (braces are optional: "@FMSynth @PingPongDelay c" produces the same events)
     const rawEvents: SequenceEvent[] = [
       { eventType: 'createNode', nodeId: 0, nodeType: 'FMSynth' },
       { eventType: 'createNode', nodeId: 1, nodeType: 'PingPongDelay', args: { wet: 1 } },

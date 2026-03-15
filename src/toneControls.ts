@@ -7,7 +7,7 @@ import {
   tonePresets,
   toneStates,
 } from './toneState'
-import { randomInstrumentMml } from 'tonejs-mml-to-json'
+import { randomInstrumentAndEffectMml } from './randomEffect'
 
 type SequenceChangeHandler = () => Promise<void>
 
@@ -20,11 +20,12 @@ async function randomizeTone(
 ) {
   const controls = toneControls[group]
   if (!controls) return false
-  const mml = randomInstrumentMml()
-  if (!mml) {
-    console.warn('randomInstrumentMml returned a falsy value')
+  const { instrument, effect } = randomInstrumentAndEffectMml()
+  if (!instrument) {
+    console.warn('randomInstrumentAndEffectMml returned a falsy instrument')
     return false
   }
+  const mml = effect ? `${instrument}\n${effect}` : instrument
   options?.clearMmlInputTimeout?.()
   controls.mmlTextarea.value = mml
   await handleToneMmlChange(group, mml, onSequenceChange)
