@@ -41,7 +41,7 @@ import {
   updateStepLabelStates,
   type SequenceChangeHandler,
 } from './noteGridState'
-export { setStepState, resetStepStates, type StepState } from './noteGridState'
+export { setStepState, resetStepStates, getStepStates, getGroupANoteNumbers, type StepState } from './noteGridState'
 import {
   randomizeAll as _randomizeAll,
   randomizeGridSelections,

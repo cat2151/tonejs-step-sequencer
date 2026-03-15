@@ -25,6 +25,10 @@ import {
   GROUP_B_MAX_MIDI,
 } from './noteGridState'
 
+function canTie(step: number): boolean {
+  return step > 0 && stepStates[step - 1] !== 'rest' && noteNumbersA[step] === noteNumbersA[step - 1]
+}
+
 function randomizeStepStates() {
   stepStates.fill('note')
   for (let step = 0; step < STEPS; step++) {
@@ -32,8 +36,7 @@ function randomizeStepStates() {
     if (r < 0.2) {
       stepStates[step] = 'rest'
     } else if (r < 0.4) {
-      // Tie is valid only if: not the first step, previous step is not rest, and pitches match
-      if (step > 0 && stepStates[step - 1] !== 'rest' && noteNumbersA[step] === noteNumbersA[step - 1]) {
+      if (canTie(step)) {
         stepStates[step] = 'tie'
       }
     }
