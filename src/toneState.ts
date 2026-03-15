@@ -25,10 +25,6 @@ export type ToneControls = {
   mmlTextarea: HTMLTextAreaElement
   jsonTextarea: HTMLTextAreaElement
   status: HTMLSpanElement
-  randomToggle: HTMLButtonElement
-  randomBody: HTMLDivElement
-  randomTextarea: HTMLTextAreaElement
-  randomError: HTMLDivElement
   clearMmlInputTimeout?: () => void
 }
 
