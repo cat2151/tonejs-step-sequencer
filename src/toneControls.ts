@@ -22,7 +22,7 @@ async function randomizeTone(
   if (!controls) return false
   const mml = randomInstrumentMml()
   if (!mml) {
-    console.warn('randomInstrumentMml returned empty string')
+    console.warn('randomInstrumentMml returned a falsy value')
     return false
   }
   options?.clearMmlInputTimeout?.()

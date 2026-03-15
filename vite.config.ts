@@ -1,5 +1,5 @@
 import { defineConfig } from 'vite'
-import path from 'path'
+import { resolve } from 'node:path'
 
 export default defineConfig({
   resolve: {
@@ -8,7 +8,7 @@ export default defineConfig({
       // import instead of the relative './web-tree-sitter.js' path expected after the
       // library's fix-dist-imports build step. This alias redirects Vite and Vitest to
       // the bundled copy that ships with the library until the upstream issue is fixed.
-      'web-tree-sitter': path.resolve(
+      'web-tree-sitter': resolve(
         './node_modules/tonejs-mml-to-json/dist/web-tree-sitter.js',
       ),
     },
