@@ -36,7 +36,7 @@ jobs:
 
       - name: Update dependencies
         if: steps.check.outputs.updated == 'true'
-        run: npm install
+        run: npm update tonejs-mml-to-json tonejs-json-sequencer
 
       - name: Build
         if: steps.check.outputs.updated == 'true'
