@@ -58,8 +58,10 @@ describe('noteGrid rest/tie states', () => {
       .split('\n')
       .map((line) => JSON.parse(line) as { eventType?: string; nodeId?: number; args?: unknown[] })
     const triggerEvents = events.filter((event) => event.eventType === 'triggerAttackRelease')
-    // Group A loses one step, Group B always plays all steps
-    expect(triggerEvents).toHaveLength(STEPS * 2 - 1)
+    const groupATriggers = triggerEvents.filter((e) => e.nodeId === GROUP_A_NODE_ID)
+    const groupBTriggers = triggerEvents.filter((e) => e.nodeId === GROUP_B_NODE_ID)
+    expect(groupATriggers).toHaveLength(STEPS - 1)
+    expect(groupBTriggers).toHaveLength(STEPS)
   })
 
   it('skips Group A trigger events for tie steps; Group B still plays', () => {
@@ -70,8 +72,10 @@ describe('noteGrid rest/tie states', () => {
       .split('\n')
       .map((line) => JSON.parse(line) as { eventType?: string; nodeId?: number; args?: unknown[] })
     const triggerEvents = events.filter((event) => event.eventType === 'triggerAttackRelease')
-    // Group A loses one step, Group B always plays all steps
-    expect(triggerEvents).toHaveLength(STEPS * 2 - 1)
+    const groupATriggers = triggerEvents.filter((e) => e.nodeId === GROUP_A_NODE_ID)
+    const groupBTriggers = triggerEvents.filter((e) => e.nodeId === GROUP_B_NODE_ID)
+    expect(groupATriggers).toHaveLength(STEPS - 1)
+    expect(groupBTriggers).toHaveLength(STEPS)
   })
 
   it('extends Group A note duration to cover tied steps; Group B uses per-step duration', () => {
@@ -93,7 +97,7 @@ describe('noteGrid rest/tie states', () => {
       const args = e.args as string[]
       return e.nodeId === GROUP_B_NODE_ID && args[2] === `+${SIXTEENTH_TICKS}i` && args[1] === `${SIXTEENTH_TICKS}i`
     })
-    expect(groupBStep1Events.length).toBeGreaterThanOrEqual(1)
+    expect(groupBStep1Events.length).toBe(1)
   })
 
   it('uses single-step tick duration when no ties follow', () => {
@@ -115,10 +119,12 @@ describe('noteGrid rest/tie states', () => {
     const events = getNdjsonSequence()
       .trim()
       .split('\n')
-      .map((line) => JSON.parse(line) as { eventType?: string; args?: unknown[] })
+      .map((line) => JSON.parse(line) as { eventType?: string; nodeId?: number; args?: unknown[] })
     const triggerEvents = events.filter((event) => event.eventType === 'triggerAttackRelease')
-    // Group A loses 3 steps, Group B plays all 16
-    expect(triggerEvents).toHaveLength(STEPS * 2 - 3)
+    const groupATriggers = triggerEvents.filter((e) => e.nodeId === GROUP_A_NODE_ID)
+    const groupBTriggers = triggerEvents.filter((e) => e.nodeId === GROUP_B_NODE_ID)
+    expect(groupATriggers).toHaveLength(STEPS - 3)
+    expect(groupBTriggers).toHaveLength(STEPS)
   })
 
   it('extends Group A duration across multiple consecutive ties; Group B plays every step', () => {
@@ -130,15 +136,24 @@ describe('noteGrid rest/tie states', () => {
       .split('\n')
       .map((line) => JSON.parse(line) as { eventType?: string; nodeId?: number; args?: unknown[] })
     const triggerEvents = events.filter((event) => event.eventType === 'triggerAttackRelease')
-    // Group A loses 2 steps (ties), Group B plays all 16
-    expect(triggerEvents).toHaveLength(STEPS * 2 - 2)
+    const groupATriggers = triggerEvents.filter((e) => e.nodeId === GROUP_A_NODE_ID)
+    const groupBTriggers = triggerEvents.filter((e) => e.nodeId === GROUP_B_NODE_ID)
+    expect(groupATriggers).toHaveLength(STEPS - 2)
+    expect(groupBTriggers).toHaveLength(STEPS)
     // Group A step 2 covers 3 sixteenth notes
     const step2StartTicks = SIXTEENTH_TICKS * 2
-    const groupAStep2Events = triggerEvents.filter((e) => {
+    const groupAStep2Events = groupATriggers.filter((e) => {
       const args = e.args as string[]
-      return e.nodeId === GROUP_A_NODE_ID && args[2] === `+${step2StartTicks}i` && args[1] === `${SIXTEENTH_TICKS * 3}i`
+      return args[2] === `+${step2StartTicks}i` && args[1] === `${SIXTEENTH_TICKS * 3}i`
     })
     expect(groupAStep2Events.length).toBe(1)
+    // Group A has no triggers at the tied step start ticks (steps 3 and 4)
+    const tiedStepTicks = [SIXTEENTH_TICKS * 3, SIXTEENTH_TICKS * 4]
+    const groupAAtTiedSteps = groupATriggers.filter((e) => {
+      const args = e.args as string[]
+      return tiedStepTicks.some((t) => args[2] === `+${t}i`)
+    })
+    expect(groupAAtTiedSteps.length).toBe(0)
   })
 })
 
