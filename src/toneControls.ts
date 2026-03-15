@@ -7,72 +7,11 @@ import {
   tonePresets,
   toneStates,
 } from './toneState'
-import {
-  DEFAULT_RANDOM_DEFINITIONS,
-  applyRandomDefinitionsToMml,
-  parseRandomDefinitions,
-  type RandomParamDefinition,
-} from './randomTone'
+import { randomInstrumentMml } from 'tonejs-mml-to-json'
 
 type SequenceChangeHandler = () => Promise<void>
 
 const toneMmlPromises: Record<Group, Promise<void>> = { A: Promise.resolve(), B: Promise.resolve() }
-
-type RandomState = { text: string | null; open: boolean; error: string; saveTimeout: number | null }
-
-const RANDOM_STORAGE_KEY = 'tonejs-random-definitions'
-const randomStates: Record<Group, RandomState> = {
-  A: { text: null, open: false, error: '', saveTimeout: null },
-  B: { text: null, open: false, error: '', saveTimeout: null },
-}
-
-function getRandomStorageKey(group: Group) {
-  return `${RANDOM_STORAGE_KEY}-${group}`
-}
-
-function loadRandomDefinitions(group: Group) {
-  if (randomStates[group].text !== null) return randomStates[group].text
-  const key = getRandomStorageKey(group)
-  try {
-    const stored = localStorage.getItem(key)
-    if (stored !== null) {
-      randomStates[group].text = stored
-      return stored
-    }
-  } catch (error) {
-    console.warn('Failed to read random tone definitions', error)
-  }
-  randomStates[group].text = DEFAULT_RANDOM_DEFINITIONS
-  return DEFAULT_RANDOM_DEFINITIONS
-}
-
-function scheduleRandomSave(group: Group, text: string) {
-  const state = randomStates[group]
-  if (state.saveTimeout !== null) {
-    window.clearTimeout(state.saveTimeout)
-  }
-  state.saveTimeout = window.setTimeout(() => {
-    try {
-      localStorage.setItem(getRandomStorageKey(group), text)
-    } catch (error) {
-      console.warn('Failed to persist random tone definitions', error)
-    }
-    state.saveTimeout = null
-  }, 300)
-}
-
-function setRandomError(group: Group, message: string) {
-  randomStates[group].error = message
-  const controls = toneControls[group]
-  if (!controls) return
-  if (message) {
-    controls.randomError.textContent = message
-    controls.randomError.removeAttribute('hidden')
-  } else {
-    controls.randomError.textContent = ''
-    controls.randomError.setAttribute('hidden', '')
-  }
-}
 
 async function randomizeTone(
   group: Group,
@@ -81,47 +20,15 @@ async function randomizeTone(
 ) {
   const controls = toneControls[group]
   if (!controls) return false
-  let definitions: RandomParamDefinition[] = []
-  try {
-    definitions = parseRandomDefinitions(controls.randomTextarea.value)
-  } catch (error) {
-    console.warn('Failed to parse random tone definitions', error)
-    setRandomError(group, 'ランダム音色定義JSONのパースに失敗しました')
+  const mml = randomInstrumentMml()
+  if (!mml) {
+    console.warn('randomInstrumentMml returned a falsy value')
     return false
   }
-  const currentMml = controls.mmlTextarea.value || toneStates[group].mmlText
-  let result
-  try {
-    result = applyRandomDefinitionsToMml(currentMml, definitions)
-  } catch (error) {
-    console.warn('Failed to apply random tone definitions', error)
-    setRandomError(group, error instanceof Error ? error.message : 'トーンJSONの解析に失敗しました')
-    return false
-  }
-  if (!result.applied) {
-    setRandomError(group, '適用できるパラメータが見つかりませんでした')
-    return false
-  }
-  setRandomError(group, '')
-  randomStates[group].text = controls.randomTextarea.value
-  scheduleRandomSave(group, controls.randomTextarea.value)
   options?.clearMmlInputTimeout?.()
-  controls.mmlTextarea.value = result.mml
-  await handleToneMmlChange(group, result.mml, onSequenceChange)
+  controls.mmlTextarea.value = mml
+  await handleToneMmlChange(group, mml, onSequenceChange)
   return true
-}
-
-function setRandomSectionOpen(group: Group, open: boolean) {
-  randomStates[group].open = open
-  const controls = toneControls[group]
-  if (!controls) return
-  controls.randomBody.classList.toggle('collapsed', !open)
-  if (open) {
-    controls.randomBody.removeAttribute('hidden')
-  } else {
-    controls.randomBody.setAttribute('hidden', '')
-  }
-  controls.randomToggle.setAttribute('aria-expanded', open ? 'true' : 'false')
 }
 
 export function setToneSectionOpen(group: Group, open: boolean) {
@@ -161,15 +68,6 @@ export function updateToneControls(group: Group) {
   ) {
     controls.jsonTextarea.value = toneStates[group].jsonText
   }
-  const randomText = loadRandomDefinitions(group)
-  if (
-    document.activeElement !== controls.randomTextarea &&
-    controls.randomTextarea.value !== randomText
-  ) {
-    controls.randomTextarea.value = randomText
-  }
-  setRandomSectionOpen(group, randomStates[group].open)
-  setRandomError(group, randomStates[group].error)
   setToneSectionOpen(group, toneStates[group].open)
   updateToneStatus(group)
 }
@@ -269,68 +167,6 @@ export function renderToneControl(group: Group, noteGrid: HTMLDivElement | null,
   mmlLabel.appendChild(mmlTextarea)
   body.appendChild(mmlLabel)
 
-  const randomSection = document.createElement('div')
-  randomSection.className = 'random-section'
-  const randomHeader = document.createElement('div')
-  randomHeader.className = 'random-header'
-  const randomToggle = document.createElement('button')
-  randomToggle.type = 'button'
-  randomToggle.className = 'random-toggle'
-  randomToggle.textContent = 'ランダム'
-  randomToggle.setAttribute('aria-expanded', 'false')
-  randomHeader.appendChild(randomToggle)
-  randomSection.appendChild(randomHeader)
-
-  const randomBody = document.createElement('div')
-  randomBody.className = 'random-body collapsed'
-  randomBody.setAttribute('hidden', '')
-
-  const randomActions = document.createElement('div')
-  randomActions.className = 'random-actions'
-  const randomExportButton = document.createElement('button')
-  randomExportButton.type = 'button'
-  randomExportButton.className = 'random-button secondary'
-  randomExportButton.textContent = 'export'
-  const randomImportButton = document.createElement('button')
-  randomImportButton.type = 'button'
-  randomImportButton.className = 'random-button secondary'
-  randomImportButton.textContent = 'import'
-  const randomResetButton = document.createElement('button')
-  randomResetButton.type = 'button'
-  randomResetButton.className = 'random-button secondary'
-  randomResetButton.textContent = 'reset'
-  randomActions.appendChild(randomExportButton)
-  randomActions.appendChild(randomImportButton)
-  randomActions.appendChild(randomResetButton)
-
-  const randomError = document.createElement('div')
-  randomError.className = 'random-error'
-  randomError.setAttribute('hidden', '')
-
-  const randomLabel = document.createElement('label')
-  randomLabel.className = 'field'
-  const randomSpan = document.createElement('span')
-  randomSpan.className = 'label'
-  randomSpan.textContent = 'ランダム音色定義JSON'
-  const randomTextarea = document.createElement('textarea')
-  randomTextarea.className = 'text-input tone-textarea'
-  randomTextarea.rows = 4
-  randomTextarea.spellcheck = false
-  randomLabel.appendChild(randomSpan)
-  randomLabel.appendChild(randomTextarea)
-
-  const randomFileInput = document.createElement('input')
-  randomFileInput.type = 'file'
-  randomFileInput.accept = 'application/json'
-  randomFileInput.setAttribute('hidden', '')
-
-  randomBody.appendChild(randomActions)
-  randomBody.appendChild(randomError)
-  randomBody.appendChild(randomLabel)
-  randomBody.appendChild(randomFileInput)
-  randomSection.appendChild(randomBody)
-  body.appendChild(randomSection)
-
   const jsonLabel = document.createElement('label')
   jsonLabel.className = 'field'
   const jsonSpan = document.createElement('span')
@@ -367,10 +203,6 @@ export function renderToneControl(group: Group, noteGrid: HTMLDivElement | null,
     mmlTextarea,
     jsonTextarea,
     status,
-    randomToggle,
-    randomBody,
-    randomTextarea,
-    randomError,
     clearMmlInputTimeout,
   }
   toggle.addEventListener('click', () => toggleToneSection(group))
@@ -399,60 +231,10 @@ export function renderToneControl(group: Group, noteGrid: HTMLDivElement | null,
     clearJsonInputTimeout()
     void handleToneJsonChange(group, jsonTextarea.value, onSequenceChange)
   })
-  randomToggle.addEventListener('click', () => {
-    setRandomSectionOpen(group, !randomStates[group].open)
-  })
-  randomTextarea.addEventListener('input', () => {
-    randomStates[group].text = randomTextarea.value
-    scheduleRandomSave(group, randomTextarea.value)
-    setRandomError(group, '')
-  })
   randomizeButton.addEventListener('click', () => {
     void randomizeTone(group, onSequenceChange, { clearMmlInputTimeout })
   })
-  randomResetButton.addEventListener('click', () => {
-    randomTextarea.value = DEFAULT_RANDOM_DEFINITIONS
-    randomStates[group].text = DEFAULT_RANDOM_DEFINITIONS
-    scheduleRandomSave(group, DEFAULT_RANDOM_DEFINITIONS)
-    setRandomError(group, '')
-  })
-  randomExportButton.addEventListener('click', () => {
-    const text = randomTextarea.value || '[]'
-    const blob = new Blob([text], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `random-tone-${group}.json`
-    link.click()
-    URL.revokeObjectURL(url)
-  })
-  randomImportButton.addEventListener('click', () => {
-    randomFileInput.value = ''
-    randomFileInput.click()
-  })
-  randomFileInput.addEventListener('change', () => {
-    const file = randomFileInput.files?.[0]
-    if (!file) return
-    const reader = new FileReader()
-    reader.onload = () => {
-      const text = typeof reader.result === 'string' ? reader.result : ''
-      if (!text) return
-      try {
-        parseRandomDefinitions(text)
-        randomTextarea.value = text
-        randomStates[group].text = text
-        scheduleRandomSave(group, text)
-        setRandomError(group, '')
-      } catch (error) {
-        console.warn('Failed to parse imported random tone definitions', error)
-        setRandomError(group, 'インポートしたJSONを読み込めませんでした')
-      }
-    }
-    reader.readAsText(file)
-  })
 
-  const initialRandomText = loadRandomDefinitions(group)
-  randomTextarea.value = initialRandomText
   updateToneControls(group)
 }
 
@@ -460,13 +242,7 @@ export async function randomizeToneWithRandomPreset(
   group: Group,
   onSequenceChange: SequenceChangeHandler,
 ) {
-  const preset = tonePresets[Math.floor(Math.random() * tonePresets.length)]
-  if (!preset) return false
   const controls = toneControls[group]
-  if (controls) {
-    controls.presetSelect.value = preset.id
-  }
-  await handleTonePresetChange(group, preset.id, onSequenceChange)
   const clearMmlInputTimeout =
     controls?.clearMmlInputTimeout ?? (() => undefined)
   return randomizeTone(group, onSequenceChange, { clearMmlInputTimeout })
