@@ -31,6 +31,14 @@ export function resetStepStates() {
   stepStates.fill('note')
 }
 
+export function getStepStates(): readonly StepState[] {
+  return stepStates
+}
+
+export function getGroupANoteNumbers(): readonly number[] {
+  return noteNumbersA
+}
+
 export function rowIndexToGroup(rowIndex: number): Group {
   return rowIndex < GROUP_SIZE ? 'A' : 'B'
 }
