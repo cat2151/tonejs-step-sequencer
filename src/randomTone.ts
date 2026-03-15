@@ -165,7 +165,11 @@ function rebuildMmlFromBlocks(mmlText: string, blocks: ToneJsonBlock[]) {
   return result
 }
 
-export function applyRandomDefinitionsToMml(mmlText: string, definitions: RandomParamDefinition[]) {
+export function applyRandomDefinitionsToMml(
+  mmlText: string,
+  definitions: RandomParamDefinition[],
+  rng: () => number = Math.random,
+) {
   const blocks = extractToneJsonBlocks(mmlText)
   if (!blocks.length) return { applied: false, mml: mmlText }
 
@@ -183,14 +187,14 @@ export function applyRandomDefinitionsToMml(mmlText: string, definitions: Random
     const hasNodePrefix = Boolean(candidateNodeType) && blocks.some((block) => block.nodeType === candidateNodeType)
     const pathSegments = hasNodePrefix ? nodeSegments.slice(1) : nodeSegments
     const numericValue = hasValues
-      ? valueOptions![Math.floor(Math.random() * valueOptions!.length)] ?? valueOptions![0]
+      ? valueOptions![Math.floor(rng() * valueOptions!.length)] ?? valueOptions![0]
       : (() => {
-          const randomValue = (low ?? 0) + Math.random() * ((high ?? 0) - (low ?? 0))
+          const randomValue = (low ?? 0) + rng() * ((high ?? 0) - (low ?? 0))
           if (definition.integer) {
             const intMin = Math.ceil(low ?? 0)
             const intMax = Math.floor(high ?? 0)
             if (intMin <= intMax) {
-              return intMin + Math.floor(Math.random() * (intMax - intMin + 1))
+              return intMin + Math.floor(rng() * (intMax - intMin + 1))
             }
             const rounded = Math.round(randomValue)
             return Math.min(Math.max(rounded, low ?? rounded), high ?? rounded)
