@@ -11,6 +11,11 @@ export default defineConfig({
       'web-tree-sitter': resolve(
         './node_modules/tonejs-mml-to-json/dist/web-tree-sitter.js',
       ),
+      // Allow importing the effect definitions JSON from the library dist without
+      // relying on package exports (the library does not export this path directly).
+      'tonejs-mml-to-json/tone-edit-effects.json': resolve(
+        './node_modules/tonejs-mml-to-json/dist/tone-edit-effects.json',
+      ),
     },
   },
   test: {

@@ -14,6 +14,9 @@
     "resolveJsonModule": true,
     "moduleDetection": "force",
     "noEmit": true,
+    "paths": {
+      "tonejs-mml-to-json/tone-edit-effects.json": ["./node_modules/tonejs-mml-to-json/dist/tone-edit-effects.json"]
+    },
 
     /* Linting */
     "strict": true,
