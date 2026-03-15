@@ -54,8 +54,7 @@ export function randomEffectMml(): string {
   if (effects.length === 0) return ''
   const effectDef = effects[Math.floor(Math.random() * effects.length)]
   const args = buildEffectArgs(effectDef.parameters)
-  const hasArgs = Object.keys(args).length > 0
-  return hasArgs ? `@${effectDef.id}${JSON.stringify(args, null, 2)}` : `@${effectDef.id}`
+  return `@${effectDef.id}${JSON.stringify(args, null, 2)}`
 }
 
 export function randomInstrumentAndEffectMml(): { instrument: string; effect: string } {
